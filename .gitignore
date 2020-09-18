@@ -1,2 +1,14 @@
 *.class
 *.log
+
+# Ignore the class files in all subfolders
+*/*.class
+*/*.log
+
+*/.stainless-cache
+*/.DS_Store
+*/.class 
+
+.metals/*
+.vscode/*
+
