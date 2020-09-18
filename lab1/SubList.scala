@@ -8,10 +8,6 @@ object SubList {
   }
  
   def subListRefl[T](l: List[T]): Unit = {
-    l match {
-      case Nil() => assert(subList(l, l))
-      case Cons(x, xs) => assert(Cons(x, xs) == Cons(x, xs))
-    }
   }.ensuring(_ =>
     subList(l, l)
   )
