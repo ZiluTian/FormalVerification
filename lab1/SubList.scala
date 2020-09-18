@@ -5,9 +5,13 @@ import stainless.annotation._
 object SubList {
  
   def subList[T](l1: List[T], l2: List[T]): Boolean = (l1, l2) match {
+    case (Nil(), _)                 => true
+    case (_, Nil())                 => false
+    case (Cons(x, xs), Cons(y, ys)) => (x == y && subList(xs, ys)) || subList(l1, ys)
   }
  
   def subListRefl[T](l: List[T]): Unit = {
+ 
   }.ensuring(_ =>
     subList(l, l)
   )
