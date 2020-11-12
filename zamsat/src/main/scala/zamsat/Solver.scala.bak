@@ -1,0 +1,73 @@
+package zamsat
+
+import scala.annotation.tailrec
+import scala.collection.immutable.Map
+import scala.collection.immutable.List
+
+
+class Solver(numVars: Int, clauses: List[Set[Int]]) {
+  type Clauses = List[Set[Int]]
+
+  type Model = Array[Boolean]
+  val assignment = Array[Int](numVars)
+  val decisions = Array[Int](numVars)
+  var level: Int
+
+  final val UNASSIGNED = 0
+  final val ASSIGN_TRUE = 1
+  final val ASSIGN_FALSE = 2
+
+  def checkConflict(): Boolean = {
+    for (clause <- clauses) {
+      var sat = false
+      for (v <- clause) {
+        sat ||= (assignment(v.abs) != (if (v >= 0) ASSIGN_FALSE else ASSIGN_TRUE))
+      }
+      if (!sat) {
+        return false
+      }
+    }
+    true
+  }
+
+  def unitPropagation(): Unit = {
+    def unit(clause: Set[Int]): Int = {
+      var res: Int = -1
+      for (v <- clause) {
+        if (assignment(v.abs) == UNASSIGNED) {
+          if (res != -1) {
+            return -1
+          }
+          res = v
+        }
+      }
+      res
+    }
+    for (clause <- clauses) {
+      val v = unit(clause)
+      if (v != -1) {
+        level += 1
+        assignment(v.abs) = if (v >= 0) ASSIGN_TRUE else ASSIGN_FALSE
+        decisions(level) = v
+        return unitPropagation()
+      }
+    }
+  }
+
+  def dpll(): Boolean = {
+    var recLevel = level
+    unitPropagation()
+
+    false
+  }
+
+  def solve(): Option[Model] = {
+    level = -1
+    if (dpll()) {
+      Some(assignment.map(e => e == ASSIGN_TRUE))
+    } else {
+      None
+    }
+  }
+
+}
