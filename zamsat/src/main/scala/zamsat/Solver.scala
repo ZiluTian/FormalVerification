@@ -3,7 +3,7 @@ package zamsat
 import scala.collection.immutable.List
 import scala.collection.immutable.Map
 
-class Solver(clauses: List[Set[Int]]) {
+class Solver() {
 
   private def literalToAssignment(v: Int): (Int, Boolean) = v.abs -> (v > 0)
 
@@ -43,6 +43,6 @@ class Solver(clauses: List[Set[Int]]) {
     }
   }
 
-  def solve(): Option[Map[Int, Boolean]] = dpll(clauses)
+  def solve(clauses: List[Set[Int]]): Option[Map[Int, Boolean]] = dpll(clauses)
 
 }
