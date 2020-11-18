@@ -8,6 +8,9 @@ target/
 # bsp
 .bsp
 
+# bloop
+.bloop
+
 # Intellij
 *.iml
 *.ipr
