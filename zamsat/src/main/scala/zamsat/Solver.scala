@@ -58,7 +58,7 @@ class Solver() {
     candEdges match {
       case Nil =>
       case _ => {
-        val candNodes: List[Node] = candEdges.map(_.to)
+        val candNodes: List[Node] = candEdges.map(_.to).filter(n => n.level == from.level)
         if (candNodes.contains(to)) {
           paths.append(List.concat(path, List(from, to)))
         } else {
