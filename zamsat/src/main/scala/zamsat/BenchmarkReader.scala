@@ -5,6 +5,8 @@ import scala.util.control.Breaks._
 import scala.io.Source
 
 class BenchmarkReader {
+  import Solver._
+
   def readTest(name: String): ArrayBuffer[ArrayBuffer[Int]] = {
     var file = Source.fromFile(name)
     var result = new ArrayBuffer[ArrayBuffer[Int]]
@@ -37,8 +39,8 @@ class BenchmarkReader {
     result
   }
 
-  def readTestAsSetList(name: String): List[Set[Int]] = {
+  def readTestAsSetList(name: String): ClauseDB = {
     var data = readTest(name)
-    List.from(data.view.map(x => Set.from(x)))
+    List.from(data.view.map(x => Set.from(x).toList))
   }
 }
