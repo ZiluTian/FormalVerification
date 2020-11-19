@@ -6,7 +6,7 @@ object Utils {
   import Solver._
   // picks random truth values for unassigned variables to complete a model
   // then checks if that model satisfies the formula
-  def probablySatisfies(model: Map[Int, Boolean], clauses: ClauseDB): Boolean = {
+  def probablySatisfies(model: Model, clauses: ClauseDB): Boolean = {
     val completeModel = model ++ clauses.foldLeft(Set[Int]()) { (s1, s2) => s1.union(s2.toSet)}.map(_.abs)
       .diff(model.keySet).map(k => k -> Random.nextBoolean()).toMap
     clauses.forall((s: Clause) => s.exists(e => completeModel.get(e.abs) match {
