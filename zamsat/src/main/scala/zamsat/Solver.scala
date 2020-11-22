@@ -10,75 +10,15 @@ object Solver {
   type ClauseDB = List[Clause]
   // each literal has a decision level
   type Model = Map[Literal, Boolean]
-
-  sealed abstract class Node {
-    def literal: Literal
-    def level: Int
-  }
-  case class DecisionNode(literal: Literal, level: Int) extends Node
-  case class ImpliedNode(literal: Literal, level: Int) extends Node
-  case class Edge(from: Node, to: Node)
-  type IG = (List[DecisionNode], List[ImpliedNode], List[Edge])
 }
 
 class Solver() {
   import Solver._
-
-  private def addNode(g: IG, n: Node): IG = {
-    n match {
-      case n: DecisionNode => (n:: g._1, g._2, g._3)
-      case n: ImpliedNode => (g._1, n:: g._2, g._3)
-    }
-  }
-
-  private def addEdge(g: IG, e: Edge): IG = {
-    (g._1, g._2, e :: g._3)
-  }
-
-  private def getLiteral(g: IG, l: Literal): Option[Node] = {
-    val decisionVar = g._1.filter(_.literal == l).headOption
-    if (decisionVar.isDefined){
-      decisionVar
-    } else {
-      g._2.filter(_.literal == l).headOption
-    }
-  }
-
-  private def getParents(g: IG, n: Node): List[Node] = {
-    g._3.filter(e => e.to == n).map(_.from)
-  }
-
-  private def getChildren(g: IG, n: Node): List[Node] = {
-    g._3.filter(e => e.from == n).map(_.to)
-  }
-
-  // return all the paths between from and to
-  private def allPaths(g: IG, from: Node, to: Node, path: List[Node], paths: ListBuffer[List[Node]]): Unit = {
-    val candEdges: List[Edge] = g._3.filter(_.from == from)
-    candEdges match {
-      case Nil =>
-      case _ => {
-        val candNodes: List[Node] = candEdges.map(_.to).filter(n => n.level == from.level)
-        if (candNodes.contains(to)) {
-          paths.append(List.concat(path, List(from, to)))
-        } else {
-          candNodes.foreach(n => allPaths(g, n, to, path :+ from, paths))
-        }
-      }
-    }
-  }
-
-  private def OneUIP(g: IG, decisionLevel: Int, conflict: ImpliedNode): List[Node] = {
-    val dNode: DecisionNode = g._1.filter(n => n.level == decisionLevel).head
-    val paths: ListBuffer[List[Node]] = new ListBuffer[List[Node]]()
-    allPaths(g, dNode, conflict, List(), paths)
-    assert(!paths.isEmpty)
-    val uips: List[Node] = paths(0).foldLeft(List[Node]())({(x, y) => if (paths.forall(_.contains(y))) x:+y else x})
-    getChildren(g, uips.last).foldLeft(Set[Node]())((x, y) => x.union(getParents(g, y).toSet)).toList
-  }
+  import IG._
 
   private def learnClause(clauses: ClauseDB, g: IG, decisionLevel: Int, conflict: ImpliedNode): Clause = {
-    OneUIP(g, decisionLevel, conflict).map(n => -n.literal)
+//    println("Learned clause: " + g.OneUIP(decisionLevel).map(n => -n.literal))
+    g.OneUIP(decisionLevel).map(n => -n.literal)
   }
 
   private def literalToAssignment(v: Literal): (Literal, Boolean) = v.abs -> (v > 0)
@@ -120,15 +60,15 @@ class Solver() {
       case Nil => (clauses, env, graph)
       case _ => {
         for (clause <- impliedClauses) {
-          if (precedingLits(clause).forall(literal => getLiteral(graph, -literal).isDefined)){
+          if (precedingLits(clause).forall(literal => graph.getLiteral(-literal).isDefined)){
             // add the implied node and its edges
-            if (!getLiteral(graph, clause.last).isDefined) {
-              updateGraph = addNode(graph, ImpliedNode(clause.last, dLevel))
+            if (!graph.getLiteral(clause.last).isDefined) {
+              updateGraph = graph.add(ImpliedNode(clause.last, dLevel))
             }
-            updateGraph = precedingLits(clause).foldLeft(updateGraph)((x, y) => addEdge(x,
-              Edge(getLiteral(graph, y).get, ImpliedNode(clause.last, dLevel))))
+            updateGraph = precedingLits(clause).foldLeft(updateGraph)((x, y) => x.add(
+              Edge(graph.getLiteral(y).get, ImpliedNode(clause.last, dLevel))))
             // conflict
-            if (getLiteral(graph, -clause.last).isDefined) {
+            if (graph.getLiteral(-clause.last).isDefined) {
               learnedClauses.append(learnClause(clauses, graph, dLevel, ImpliedNode(clause.last, dLevel)))
             }
           }
@@ -159,7 +99,7 @@ class Solver() {
       val literal = iClauses.head.head
       val nextDL: Int = decisionLevel + 1
       for (v <- Seq(literal, -literal)) {
-        dpll(satisfy(clauses, v), nextDL, addNode(graph, DecisionNode(v, nextDL))) match {
+        dpll(satisfy(clauses, v), nextDL, graph.add(DecisionNode(v, nextDL))) match {
           case Some(model) => return Some(iModel ++ model + literalToAssignment(v))
           case _ =>
         }
@@ -169,7 +109,7 @@ class Solver() {
   }
 
   def solve(clauses: ClauseDB): Option[Model] = {
-    val implicationGraph: IG = (List[DecisionNode](), List[ImpliedNode](), List[Edge]())
+    val implicationGraph: IG = new IG((List[DecisionNode](), List[ImpliedNode](), List[Edge]()))
 
     dpll(clauses, 0, implicationGraph)
   }
