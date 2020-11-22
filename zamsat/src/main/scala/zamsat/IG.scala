@@ -6,6 +6,7 @@ import scala.collection.immutable.List
 import scala.collection.mutable.ListBuffer
 
 object IG {
+
   sealed trait Node {
     def literal: Literal
     def level: Int
@@ -22,11 +23,10 @@ object IG {
   case class DecisionNode(literal: Literal, level: Int) extends Node
 
   case class ImpliedNode(literal: Literal, level: Int) extends Node
+
   sealed case class Edge(from: Node, to: Node)
 
   type State = (List[DecisionNode], List[ImpliedNode], List[Edge])
-
-
 }
 
 class IG(state: IG.State) {

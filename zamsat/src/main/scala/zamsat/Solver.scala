@@ -16,11 +16,6 @@ class Solver() {
   import Solver._
   import IG._
 
-  private def learnClause(clauses: ClauseDB, g: IG, decisionLevel: Int, conflict: ImpliedNode): Clause = {
-//    println("Learned clause: " + g.OneUIP(decisionLevel).map(n => -n.literal))
-    g.OneUIP(decisionLevel).map(n => -n.literal)
-  }
-
   private def literalToAssignment(v: Literal): (Literal, Boolean) = v.abs -> (v > 0)
 
   private def satisfy(clauses: ClauseDB, v: Literal): ClauseDB =
@@ -38,6 +33,11 @@ class Solver() {
     val literals = clauses.foldLeft(Set[Literal]()) { (s1, s2) => s1.union(s2.toSet) }
     val units = literals.filterNot(e => literals.contains(-e))
     (clauses.filterNot(_.exists(units.contains)), units.map(literalToAssignment).toMap)
+  }
+
+  private def learnClause(g: IG, decisionLevel: Int): Clause = {
+    //    println("Learned clause: " + g.OneUIP(decisionLevel).map(n => -n.literal))
+    g.OneUIP(decisionLevel).map(n => -n.literal)
   }
 
   // deduction
@@ -69,7 +69,7 @@ class Solver() {
               Edge(graph.getLiteral(y).get, ImpliedNode(clause.last, dLevel))))
             // conflict
             if (graph.getLiteral(-clause.last).isDefined) {
-              learnedClauses.append(learnClause(clauses, graph, dLevel, ImpliedNode(clause.last, dLevel)))
+              learnedClauses.append(learnClause(graph, dLevel))
             }
           }
         }
