@@ -1,12 +1,34 @@
 package zamsat
 
+import scala.util.control.Breaks.{break, breakable}
+
 object Main extends App {
-  val problem = Utils.generateRandomFormula(4, 5, 3)
-  val solution = new Solver().solve(problem)
-  val ok = solution match {
-    case Some(model) => Utils.probablySatisfies(model, problem)
-    case None => true
-  }
+  val filename = "benchmarks/uf20-91/uf20-02.cnf"
+  val problem = new BenchmarkReader().readTestAsSetList(filename)
+  val solver = new IterativeSolver(20, problem.map(_.toList))
   println("Problem: " + Utils.formulaToString(problem))
-  println("Solution(" + (if (ok) "✔" else "✘") + "): " + solution)
+
+  breakable {
+    while (true) {
+      solver.solve() match {
+        case Some (sol) =>
+          // this is not nice :D
+          val sol2 = sol.toList.zipWithIndex.map({case (a,b) => (b + 1, a) }).toMap
+          println("Solution: " + sol2)
+          if (Utils.probablySatisfies(sol2, problem)) {
+            println("OK")
+          } else {
+            println("BAD")
+          }
+          // comment out the next break to get all solutions
+          //break()
+        case None =>
+          println("No solution found!")
+          break()
+      }
+    }
+  }
+
+
+
 }
