@@ -1,11 +1,12 @@
 package zamsat
 
 import scala.util.control.Breaks.{break, breakable}
+import scala.collection.mutable.ArrayBuffer
 
 object Main extends App {
   val filename = "benchmarks/uf20-91/uf20-02.cnf"
   val problem = new BenchmarkReader().readTestAsSetList(filename)
-  val solver = new IterativeSolver(20, problem.map(_.toList))
+  val solver = new IterativeSolver(20, problem.to(ArrayBuffer))
   println("Problem: " + Utils.formulaToString(problem))
 
   breakable {

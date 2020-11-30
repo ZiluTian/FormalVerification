@@ -2,8 +2,11 @@ package zamsat
 
 import scala.annotation.tailrec
 import scala.collection.immutable.List
+import scala.collection.mutable.ArrayBuffer
+import zamsat.LiteralWatcher
+import zamsat.Assignment
 
-class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
+class IterativeSolver(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
   // state records the assigned truth value of all variables
   // the truth value of variable i can be found at state(i - 1)
   private final val state         : Array[Int] = Array.fill(numVars){0}
@@ -14,10 +17,9 @@ class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
   private final var decisionLevel : Int        = -1
   private final var level         : Int        = -1
 
-  private final val UNASSIGNED = 0
-  private final val ASSIGN_TRUE = 1
-  private final val ASSIGN_FALSE = 2
   private final val doDebug = false
+
+  private final val literalWatcher = new LiteralWatcher(numVars, clauses)
 
   private final def debug(s: => String): Unit = if (doDebug) println(s)
 
@@ -25,8 +27,8 @@ class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
   // (so all assigned but none satisfied)
   private final def checkConflict(): Boolean = {
     clauses.exists(_.forall(v =>
-      state(v.abs - 1) != UNASSIGNED &&
-      state(v.abs - 1) != (if (v > 0) ASSIGN_TRUE else ASSIGN_FALSE)))
+      state(v.abs - 1) != Assignment.UNASSIGNED &&
+      state(v.abs - 1) != (if (v > 0) Assignment.TRUE else Assignment.FALSE)))
   }
 
   // all variables are assigned a truth value if we are at assignment level numVars - 1
@@ -34,14 +36,14 @@ class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
 
   // getUnassigned optionally return the first unassigned variable it can find (lowest number)
   private final def getUnassigned: Option[Int] =
-    state.zipWithIndex.find({ case (el, idx) => el == UNASSIGNED }).map({ case (el, idx) => idx + 1 })
+    state.zipWithIndex.find({ case (el, idx) => el == Assignment.UNASSIGNED }).map({ case (el, idx) => idx + 1 })
 
   // assign takes in a literal and makes it so that literal is satisfied
   // (will overwrite previous truth value if there is one)
   private final def assign(literal: Int): Int = {
     level += 1
     debug(f"Assigning $literal at level $level (decisionlevel $decisionLevel)")
-    state(literal.abs - 1) = if (literal > 0) ASSIGN_TRUE else ASSIGN_FALSE
+    state(literal.abs - 1) = if (literal > 0) Assignment.TRUE else Assignment.FALSE
     assignments(level) = literal
     debug(state.toList.toString())
     level
@@ -64,7 +66,7 @@ class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
       // undoes all assigments including the assigment of the decision itself
       for (i <- level to decisions(decisionLevel) by -1) {
         debug(f"Unassigning ${assignments(i)} (level $i)")
-        state(assignments(i).abs - 1) = UNASSIGNED
+        state(assignments(i).abs - 1) = Assignment.UNASSIGNED
       }
       level = decisions(decisionLevel) - 1
       decisionLevel = decisionLevel - 1
@@ -83,33 +85,29 @@ class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
     }
   }
 
-  @tailrec
   private final def unitPropagation(): Unit = {
+    // assume that the last assignment was a decision
+    require(decisionLevel >= 0 && decisions(decisionLevel) == level)
     debug("Doing unit")
-    // unit finds a unit literal in a clause if there is one, otherwise returns 0
-    def unit(clause: List[Int]): Int = {
-      if (clause.exists(e => state(e.abs - 1) == (if (e > 0) ASSIGN_TRUE else ASSIGN_FALSE))) {
-        // the clause is already satisfied
-        0
-      } else {
-        // get all unassigned literals
-        val unassigned = clause.filter(e => state(e.abs - 1) == UNASSIGNED)
-        // if there is just one, return it; otherwise return 0
-        if (unassigned.size == 1) {
-          debug("unit: " + unassigned.head + "(" + clause + ")")
-          debug((clause.map(e => state(e.abs - 1) == (if (e > 0) ASSIGN_TRUE else ASSIGN_FALSE)).toString()))
-          unassigned.head
-        } else {
-          0
+    var currentLevel = level
+    // check the consequences of assignment at each level, starting with current one
+    do {
+      // unit finds a unit literal in a clause if there is one, otherwise returns 0
+      var impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
+      impliedLiterals match {
+        case Some(literals) => {
+          for (literal <- literals) {
+            // check for double assignment
+            if (state(literal.abs - 1) == Assignment.UNASSIGNED) {
+              assign(literal)
+            }
+          }
         }
+        case None => return
       }
-    }
-    // find the first clause with a unit literal and if there is one, satisfy it and do unitprop again
-    // otherwise do nothing
-    clauses.map(unit).find(_ != 0) match {
-      case Some(v) => assign(v); unitPropagation()
-      case _ =>
-    }
+
+      currentLevel += 1
+    } while (currentLevel <= level)
   }
 
   private final def decide(): Boolean = {
@@ -123,7 +121,9 @@ class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
 
   private final def dpll(): Boolean = {
     while (true) {
-      unitPropagation()
+      if (level > -1) {
+        unitPropagation()
+      }
       if (checkConflict()) {
         if (!backtrack()) {
           return false
@@ -138,13 +138,14 @@ class IterativeSolver(numVars: Int, clauses: List[List[Int]]) {
   }
 
   def solve(): Option[Array[Boolean]] = {
+    literalWatcher.prepareWatchedLiterals()
     // we backtrack here to be able to return multiple solutions
     // the first time solve is called backtrack will do nothing because the decision level is -1
     backtrack()
     debug("going again!")
     if (dpll()) {
-      debug(state.map(e => e == ASSIGN_TRUE).mkString(", "))
-      Some(state.map(e => e == ASSIGN_TRUE))
+      debug(state.map(e => e == Assignment.TRUE).mkString(", "))
+      Some(state.map(e => e == Assignment.TRUE))
     } else {
       None
     }
