@@ -27,6 +27,7 @@ object Main extends App {
           println("No solution found!")
           break()
       }
+      break()
     }
   }
 

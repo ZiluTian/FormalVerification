@@ -6,7 +6,9 @@ import scala.collection.mutable.ArrayBuffer
 import zamsat.LiteralWatcher
 import zamsat.Assignment
 
-class IterativeSolver(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
+class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[Int]]) {
+  // we add a fake variable to deal with initial unit clauses
+  private final val numVars       : Int = numRealVars + 1
   // state records the assigned truth value of all variables
   // the truth value of variable i can be found at state(i - 1)
   private final val state         : Array[Int] = Array.fill(numVars){0}
@@ -61,7 +63,8 @@ class IterativeSolver(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
   // backtrack undoes all assigments from the current decision level
   @tailrec
   private final def backtrack(): Boolean = {
-    if (decisionLevel >= 0) {
+    // don't backtrack the first decision bc it was made on fake variable
+    if (decisionLevel >= 1) {
       debug(f"Backtracking from decision level $decisionLevel (level $level)")
       // undoes all assigments including the assigment of the decision itself
       for (i <- level to decisions(decisionLevel) by -1) {
@@ -80,7 +83,7 @@ class IterativeSolver(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
         backtrack()
       }
     } else {
-      // if the current decision level is -1 then we cannot backtrack any further (unsat)
+      // if the current decision level is 0 then we cannot backtrack any further (unsat)
       false
     }
   }
@@ -120,10 +123,11 @@ class IterativeSolver(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
   }
 
   private final def dpll(): Boolean = {
+    // do a decision on fake variable
+    // it always should be assigned 0
+    decide(-numVars)
     while (true) {
-      if (level > -1) {
-        unitPropagation()
-      }
+      unitPropagation()
       if (checkConflict()) {
         if (!backtrack()) {
           return false
@@ -138,6 +142,18 @@ class IterativeSolver(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
   }
 
   def solve(): Option[Array[Boolean]] = {
+    // ensure that all clauses have at least 2 variables
+    if (clauses.exists(_.isEmpty)) {
+      return None
+    }
+    // adding fake variable to all unit clauses
+    clauses = clauses.map(x =>
+      if (x.length > 1) {
+        x
+      } else {
+        numVars :: x
+      }
+    )
     literalWatcher.prepareWatchedLiterals()
     // we backtrack here to be able to return multiple solutions
     // the first time solve is called backtrack will do nothing because the decision level is -1
@@ -145,7 +161,7 @@ class IterativeSolver(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
     debug("going again!")
     if (dpll()) {
       debug(state.map(e => e == Assignment.TRUE).mkString(", "))
-      Some(state.map(e => e == Assignment.TRUE))
+      Some(state.slice(0, state.length - 1).map(e => e == Assignment.TRUE))
     } else {
       None
     }
