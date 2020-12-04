@@ -3,8 +3,6 @@ package zamsat
 import scala.annotation.tailrec
 import scala.collection.immutable.List
 import scala.collection.mutable.ArrayBuffer
-import zamsat.LiteralWatcher
-import zamsat.Assignment
 
 class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[Int]]) {
   // we add a fake variable to deal with initial unit clauses
@@ -19,6 +17,46 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   private final var decisionLevel : Int        = -1
   private final var level         : Int        = -1
 
+  private final var conflictLevel: Option[Int] = None
+  private final val counters : Array[Int] = Array.fill(clauses.size){0}
+  private final val varClauses : Array[List[Int]] = Array.fill(clauses.size*2){Nil}
+  private final def varToCtrIdx(v: Int) = (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
+  for ((clause, index) <- clauses.zipWithIndex) {
+    counters(index) = clause.size
+    for (variable <- clause) {
+      val varIdx = varToCtrIdx(variable)
+      varClauses(varIdx) = index :: varClauses(varIdx)
+    }
+  }
+  private final def counterAssign(v: Int, level: Int): Unit = {
+    var conflict = false
+    for (clause <- varClauses(varToCtrIdx(-v))) {
+      counters(clause) -= 1
+      if (counters(clause) <= 0) {
+        conflict = true
+      }
+    }
+    if (conflict) {
+      conflictLevel match {
+        case None =>
+          conflictLevel = Some(level)
+        case Some(l) if l > level =>
+          conflictLevel = Some(level)
+        case _ =>
+      }
+    }
+  }
+  private final def counterUnassign(v: Int, level: Int): Unit = {
+    for (clause <- varClauses(varToCtrIdx(-v))) {
+      counters(clause) += 1
+    }
+    conflictLevel match {
+      case Some(l) if l >= level =>
+        conflictLevel = None
+      case _ =>
+    }
+  }
+
   private final val doDebug = false
 
   private final val literalWatcher = new LiteralWatcher(numVars, clauses)
@@ -27,11 +65,12 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   // we have a conflict if there is at least one clause of which every literal is assigned the wrong truth value
   // (so all assigned but none satisfied)
-  private final def checkConflict(): Boolean = {
-    clauses.exists(_.forall(v =>
-      state(v.abs - 1) != Assignment.UNASSIGNED &&
-      state(v.abs - 1) != (if (v > 0) Assignment.TRUE else Assignment.FALSE)))
-  }
+  private final def checkConflict(): Boolean = conflictLevel.isDefined
+//  {
+//    clauses.exists(_.forall(v =>
+//      state(v.abs - 1) != Assignment.UNASSIGNED &&
+//      state(v.abs - 1) != (if (v > 0) Assignment.TRUE else Assignment.FALSE)))
+//  }
 
   // all variables are assigned a truth value if we are at assignment level numVars - 1
   private final def allAssigned(): Boolean = level == numVars - 1
@@ -47,6 +86,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     debug(f"Assigning $literal at level $level (decisionlevel $decisionLevel)")
     state(literal.abs - 1) = if (literal > 0) Assignment.TRUE else Assignment.FALSE
     assignments(level) = literal
+    counterAssign(literal, level)
     debug(state.toList.toString())
     level
   }
@@ -70,6 +110,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       for (i <- level to decisions(decisionLevel) by -1) {
         debug(f"Unassigning ${assignments(i)} (level $i)")
         state(assignments(i).abs - 1) = Assignment.UNASSIGNED
+        counterUnassign(assignments(i), i)
       }
       level = decisions(decisionLevel) - 1
       decisionLevel = decisionLevel - 1
@@ -96,7 +137,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     // check the consequences of assignment at each level, starting with current one
     do {
       // unit finds a unit literal in a clause if there is one, otherwise returns 0
-      var impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
+      val impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
       impliedLiterals match {
         case Some(literals) => {
           for (literal <- literals) {
