@@ -17,8 +17,12 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   private final var decisionLevel : Int        = -1
   private final var level         : Int        = -1
 
+  // conflictLevel is optionally the lowest level at which a conflict occurred (in the current branch)
   private final var conflictLevel: Option[Int] = None
+  // counters counts for every how many of its literals are satisfied or unassiged (if one of these drops to 0 we have a conflict)
   private final val counters : Array[Int] = Array.fill(clauses.size){0}
+  // varClauses is an array of lists of clause indices that contain a particular literal
+  // the list for literal v can be found at (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
   private final val varClauses : Array[List[Int]] = Array.fill(clauses.size*2){Nil}
   private final def varToCtrIdx(v: Int) = (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
   for ((clause, index) <- clauses.zipWithIndex) {
@@ -28,6 +32,9 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       varClauses(varIdx) = index :: varClauses(varIdx)
     }
   }
+  // order determines the decision order by the amount of times a literal occurs in clauses (more occurrences -> get picked first)
+  private final val order = constructOrder()
+  private final var orderIdx = 0
   private final def counterAssign(v: Int, level: Int): Unit = {
     var conflict = false
     for (clause <- varClauses(varToCtrIdx(-v))) {
@@ -55,6 +62,14 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
         conflictLevel = None
       case _ =>
     }
+  }
+
+  private final def constructOrder(): Array[Int] = {
+    val dupOrder = varClauses.map(_.size).zipWithIndex.sortBy(_._1)(Ordering[Int].reverse).map(e => (if (e._2 % 2 == 0) 1 else -1) * (e._2 / 2 + 1))
+    dupOrder.foldLeft(List[Int]()) {
+      case (acc, item) if acc.contains(-item) => acc
+      case (acc, item) => item::acc
+    }.reverse.toArray
   }
 
   private final val doDebug = false
@@ -115,8 +130,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       level = decisions(decisionLevel) - 1
       decisionLevel = decisionLevel - 1
       val decision = assignments(level + 1)
-      if (decision > 0) {
-        // if the decision we reversed was a positive literal, we still have to try its negation
+      while (order(orderIdx) != decision.abs) {
+        orderIdx -= 1
+      }
+      if (order(orderIdx) == decision) {
+        // if the decision we reversed was the same sign as defined in [order], we still have to try its negation
         decide(-decision)
         true
       } else {
@@ -139,14 +157,13 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       // unit finds a unit literal in a clause if there is one, otherwise returns 0
       val impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
       impliedLiterals match {
-        case Some(literals) => {
+        case Some(literals) =>
           for (literal <- literals) {
             // check for double assignment
             if (state(literal.abs - 1) == Assignment.UNASSIGNED) {
               assign(literal)
             }
           }
-        }
         case None => return
       }
 
@@ -154,13 +171,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     } while (currentLevel <= level)
   }
 
-  private final def decide(): Boolean = {
-    // get the first unassigned variable and decide that it is true
-    // returns true if a decision was made, false otherwise
-    getUnassigned match {
-      case Some(v) => decide(v); true
-      case _ => false
+  private final def decide(): Unit = {
+    while(state(order(orderIdx).abs - 1) != Assignment.UNASSIGNED) {
+      orderIdx += 1
     }
+    decide(order(orderIdx))
   }
 
   private final def dpll(): Boolean = {
