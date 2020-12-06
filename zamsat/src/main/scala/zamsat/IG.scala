@@ -61,9 +61,12 @@ class IG(state: IG.State) {
   }
 
   def conflictNode(dLevel: Int): Option[Node] = {
-    state._2.map(_ match {
-      case ImpliedNode(x, l) if (state._2.contains(ImpliedNode(-x, l)) && l==dLevel) => ImpliedNode(x, l)
-    }).headOption
+    state._2
+      .filter(x => x.isInstanceOf[ImpliedNode])
+      .filter(x => x.level == dLevel)
+      .map(x => Math.abs(x.literal))
+      .groupBy(identity).collect {
+        case (x, ys) if ys.lengthCompare(1) > 0 => ImpliedNode(x, dLevel) }.headOption
   }
 
   def OneUIP(dLevel: Int): List[Node] = {
