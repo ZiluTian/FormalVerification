@@ -44,7 +44,6 @@ class IG(state: IG.State) {
     new IG(state._1, state._2, edge :: state._3)
   }
 
-  // todo: rewrite in more functional style
   def allPaths(from: Node, to: Node, path: List[Node] = List(), paths: Set[List[Node]] = Set[List[Node]]()): Set[List[Node]] = {
     val candEdges: List[Edge] = state._3.filter(_.from == from)
     candEdges match {
@@ -55,7 +54,6 @@ class IG(state: IG.State) {
           paths.union(Set(List.concat(path, List(from, to))))
         } else {
           candNodes.foldLeft(paths)((x, y) => x.union(allPaths(y, to, path :+ from, x)))
-//          candNodes.map(n => allPaths(n, to, path :+ from, paths))
         }
       }
     }
@@ -89,6 +87,15 @@ class IG(state: IG.State) {
       case Some(x) => {
         val uips: List[Node] = UIPS(dLevel)
         uips.last.getChildren(state).foldLeft(Set[Node]())((x, y) => x.union(y.getParents(state).toSet)).toList
+      }
+    }
+  }
+
+  def LastUIP(dLevel: Int): List[Node] = {
+    conflictNode(dLevel) match {
+      case None => List()
+      case Some(x) => {
+        state._2.filter(n => n.level < dLevel) ++ state._1.filter(n => n.level <= dLevel)
       }
     }
   }
