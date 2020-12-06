@@ -45,16 +45,17 @@ class IG(state: IG.State) {
   }
 
   // todo: rewrite in more functional style
-  private def allPaths(from: Node, to: Node, path: List[Node], paths: ListBuffer[List[Node]]): Unit = {
+  def allPaths(from: Node, to: Node, path: List[Node] = List(), paths: Set[List[Node]] = Set[List[Node]]()): Set[List[Node]] = {
     val candEdges: List[Edge] = state._3.filter(_.from == from)
     candEdges match {
-      case Nil =>
+      case Nil => Set()
       case _ => {
         val candNodes: List[Node] = candEdges.map(_.to).filter(n => n.level == from.level)
         if (candNodes.contains(to)) {
-          paths.append(List.concat(path, List(from, to)))
+          paths.union(Set(List.concat(path, List(from, to))))
         } else {
-          candNodes.foreach(n => allPaths(n, to, path :+ from, paths))
+          candNodes.foldLeft(paths)((x, y) => x.union(allPaths(y, to, path :+ from, x)))
+//          candNodes.map(n => allPaths(n, to, path :+ from, paths))
         }
       }
     }
@@ -69,16 +70,24 @@ class IG(state: IG.State) {
         case (x, ys) if ys.lengthCompare(1) > 0 => ImpliedNode(x, dLevel) }.headOption
   }
 
-  def OneUIP(dLevel: Int): List[Node] = {
+  def UIPS(dLevel: Int): List[Node] = {
     conflictNode(dLevel) match {
       case None => List()
       case Some(x) => {
         val conflict: Node = x
         val dNode: DecisionNode = state._1.filter(n => n.level == dLevel).head
-        val paths: ListBuffer[List[Node]] = new ListBuffer[List[Node]]()
-        allPaths(dNode, conflict, List(), paths)
+        val paths: Set[List[Node]] = allPaths(dNode, conflict)
         assert(!paths.isEmpty)
-        val uips: List[Node] = paths(0).foldLeft(List[Node]())({(x, y) => if (paths.forall(_.contains(y))) x:+y else x})
+        (paths.head.foldLeft(List[Node]())({ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x })).filterNot(n => n == x)
+      }
+    }
+  }
+
+  def OneUIP(dLevel: Int): List[Node] = {
+    conflictNode(dLevel) match {
+      case None => List()
+      case Some(x) => {
+        val uips: List[Node] = UIPS(dLevel)
         uips.last.getChildren(state).foldLeft(Set[Node]())((x, y) => x.union(y.getParents(state).toSet)).toList
       }
     }
