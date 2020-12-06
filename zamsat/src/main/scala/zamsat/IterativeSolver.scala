@@ -103,7 +103,6 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     assignments(level) = literal
     counterAssign(literal, level)
     debug(state.toList.toString())
-    println(assignments.toList.toString())
     level
   }
 
