@@ -23,7 +23,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   private final val counters : Array[Int] = Array.fill(clauses.size){0}
   // varClauses is an array of lists of clause indices that contain a particular literal
   // the list for literal v can be found at (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
-  private final val varClauses : Array[List[Int]] = Array.fill(clauses.size*2){Nil}
+  private final val varClauses : Array[List[Int]] = Array.fill(clauses.size*2 + 1){Nil}
   private final def varToCtrIdx(v: Int) = (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
   for ((clause, index) <- clauses.zipWithIndex) {
     counters(index) = clause.size
@@ -66,7 +66,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   private final def constructOrder(): Array[Int] = {
     val dupOrder = varClauses.map(_.size).zipWithIndex.sortBy(_._1)(Ordering[Int].reverse).map(e => (if (e._2 % 2 == 0) 1 else -1) * (e._2 / 2 + 1))
-    dupOrder.foldLeft(List[Int]()) {
+    dupOrder.foldLeft(List[Int](numVars)) {
       case (acc, item) if acc.contains(-item) => acc
       case (acc, item) => item::acc
     }.reverse.toArray
@@ -103,6 +103,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     assignments(level) = literal
     counterAssign(literal, level)
     debug(state.toList.toString())
+    println(assignments.toList.toString())
     level
   }
 
