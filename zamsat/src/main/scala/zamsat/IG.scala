@@ -24,9 +24,9 @@ class IG() {
 
   import IG._
 
-  val decisionNodess: ListBuffer[DecisionNode] = new ListBuffer[DecisionNode]()
-  val impliedNodess: ListBuffer[ImpliedNode] = new ListBuffer[ImpliedNode]()
-  val edgess: ListBuffer[Edge] = new ListBuffer[Edge]()
+  var decisionNodess: ListBuffer[DecisionNode] = new ListBuffer[DecisionNode]()
+  var impliedNodess: ListBuffer[ImpliedNode] = new ListBuffer[ImpliedNode]()
+  var edgess: ListBuffer[Edge] = new ListBuffer[Edge]()
 
   def init(dN: List[DecisionNode], iN: List[ImpliedNode], es: List[Edge]): Unit = {
     decisionNodess.appendAll(dN)
@@ -43,6 +43,18 @@ class IG() {
 
   def add(edge: Edge): Unit = {
     edgess.append(edge)
+  }
+
+  def getDecisionNodess(): List[DecisionNode] = {
+    decisionNodess.toList
+  }
+
+  def getImpliedNodess(): List[ImpliedNode] = {
+    impliedNodess.toList
+  }
+
+  def getEdgess(): List[Edge] = {
+    edgess.toList
   }
 
   def getParents(n: Node): Set[Node] = {
@@ -109,31 +121,28 @@ class IG() {
   }
 
   // conflictClause returns all nodes belonging to reason side that have edges leading to conflicting side
-  def conflictClause(conflictSide: Set[Node]): Set[Node] = {
-    conflictSide.flatMap(c => getParents(c).diff(conflictSide))
+  // the clause learned from the conflict
+  def conflictClause(conflictSide: Set[Node]): List[Literal] = {
+    conflictSide.flatMap(c => getParents(c).diff(conflictSide)).map(n => -n.literal).toList
+  }
+
+  // update the IG when removing the conflict nodes
+  def removeConflictNodes(uip: Node): Unit = {
+    val conflictNodes: Set[Node] = cut(uip)
+
+    impliedNodess = impliedNodess.filterNot(n => conflictNodes.contains(n))
+    decisionNodess = decisionNodess.filterNot(n => conflictNodes.contains(n))
+    edgess = edgess.filterNot(n => conflictNodes.contains(n.from) || conflictNodes.contains(n.to))
   }
 
   // Can extend to arbitrary learning scheme by varying the UIP selection
-  def learn(uip: Node): Set[Node] = {
+  def learn(uip: Node): List[Literal] = {
     conflictClause(cut(uip))
   }
 
-//  def OneUIP(dLevel: Int): Set[Node] = {
-//    conflictNode(dLevel) match {
-//      case None => Set()
-//      case Some(x) =>
-//        conflictClause(cut(UIPS(dLevel).last))
-//    }
-//  }
-
-//  def LastUIP(dLevel: Int): Set[Node] = {
-//    conflictNode(dLevel) match {
-//      case None => Set()
-//      case Some(x) =>
-//        val uips: List[Node] = UIPS(dLevel)
-//        conflictClause(cut(uips.head))
-//    }
-//  }
+  def OneUIP(dLevel: Int): List[Literal] = {
+    learn(UIPS(dLevel).last)
+  }
 
   def getLiteral(l: Literal): Option[Node] = {
     val decisionVar = decisionNodess.find(_.literal == l)

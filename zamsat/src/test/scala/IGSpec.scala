@@ -26,14 +26,13 @@ class IGSpec extends AnyFlatSpec {
   val e5 = Edge(n3, n4)
   val e6 = Edge(n8, n5)
   val e7 = Edge(n4, n5)
-  val e8 = Edge(n1, n3)
   val e9 = Edge(n4, n6)
   val e10 = Edge(n9, n6)
   val e11 = Edge(n6, n10)
   //    val e12 = Edge(n5, n10)
 
   var sampleGraph: IG = new IG()
-  sampleGraph.init(List(n1), List(n2, n3, n4, n5, n6, n7, n8, n9, n10), List(e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11))
+  sampleGraph.init(List(n1), List(n2, n3, n4, n5, n6, n7, n8, n9, n10), List(e1, e2, e3, e4, e5, e6, e7, e9, e10, e11))
 
   "Conflict node" should "detect node 5" in {
     assert(sampleGraph.conflictNode(4).contains(n5))
@@ -53,14 +52,22 @@ class IGSpec extends AnyFlatSpec {
     assert(uips == List(n1, n4))
   }
 
-  "Cut oneUIP" should "return conflict side n5, n10, n6 and the rest reason side"
-  "OneUIP" should "return List(n8, n4, n9)" in {
+  "Cut oneUIP" should "return conflict side n5, n10, n6 and the rest reason side" in {
     assert(sampleGraph.cut(n4) == Set(n5, n6, n10))
-    assert(sampleGraph.learn(n4) == Set(n8, n4, n9))
+  }
+
+  "OneUIP" should "return List(n8, n4, n9)" in {
+    assert(sampleGraph.learn(n4).diff(List(-4, 8, 9)).isEmpty)
   }
 
   "LastUIP" should "return List(n8, n1, n7, n9)" in {
     assert(sampleGraph.cut(n1) == Set(n2, n3, n4, n5, n6, n10))
-    assert(sampleGraph.learn(n1) == Set(n7, n8, n9, n1))
+    assert(sampleGraph.learn(n1).diff(List(n7, n8, n9, n1).map(x => -x.literal)).isEmpty)
+  }
+
+  "Remove conflict nodes" should "return a partial graph" in {
+    sampleGraph.removeConflictNodes(n4)
+    assert(sampleGraph.getImpliedNodess().diff(List(n2, n3, n4, n7, n8, n9)).isEmpty)
+//    println(sampleGraph.getEdgess())
   }
 }
