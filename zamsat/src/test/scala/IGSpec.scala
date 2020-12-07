@@ -3,7 +3,6 @@ import zamsat.IG
 import zamsat.IG._
 
 import scala.collection.immutable.List
-import scala.collection.mutable.ListBuffer
 
 class IGSpec extends AnyFlatSpec {
 
@@ -33,19 +32,11 @@ class IGSpec extends AnyFlatSpec {
   val e11 = Edge(n6, n10)
   //    val e12 = Edge(n5, n10)
 
-  var sampleGraph: IG = new IG(List(), List(n2, n3, n4, n5, n6, n7, n8, n9), List(e1, e2, e3, e4, e5, e6, e7, e8, e9))
-//  val sampleGraph: IG = new IG(List(n1), List(n2, n3, n4, n5, n6, n7, n8, n9, n10), List(e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11))
-
-  // If tested individually, please use the commented out sampleGraph. Otherwise graph incomplete
-  "Build graph, add nodes and add edges" should "work" in {
-    sampleGraph = sampleGraph.add(n1)
-    sampleGraph = sampleGraph.add(n10)
-    sampleGraph = sampleGraph.add(e10)
-    sampleGraph = sampleGraph.add(e11)
-  }
+  var sampleGraph: IG = new IG()
+  sampleGraph.init(List(n1), List(n2, n3, n4, n5, n6, n7, n8, n9, n10), List(e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11))
 
   "Conflict node" should "detect node 5" in {
-    assert(sampleGraph.conflictNode(4) == Some(n5))
+    assert(sampleGraph.conflictNode(4).contains(n5))
   }
 
   "All paths" should "identify all the paths between two nodes" in {
@@ -63,13 +54,13 @@ class IGSpec extends AnyFlatSpec {
   }
 
   "OneUIP" should "return List(n8, n4, n9)" in {
-    val oneUIP: List[Node] = sampleGraph.OneUIP(4)
-    assert(oneUIP == List(n8, n4, n9))
+    val oneUIP: Set[Node] = sampleGraph.OneUIP(4)
+    assert(oneUIP == Set(n8, n4, n9))
   }
 
   "LastUIP" should "return List(n8, n1, n7, n9)" in {
-    val lUIP: List[Node] = sampleGraph.LastUIP(4)
-    assert(lUIP == List(n7, n8, n9, n1))
+    val lUIP: Set[Node] = sampleGraph.LastUIP(4)
+    assert(lUIP == Set(n7, n8, n9, n1))
   }
 
 }
