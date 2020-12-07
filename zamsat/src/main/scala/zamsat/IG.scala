@@ -89,22 +89,51 @@ class IG() {
     }
   }
 
-  def OneUIP(dLevel: Int): Set[Node] = {
-    conflictNode(dLevel) match {
-      case None => Set()
-      case Some(x) =>
-        val uips: List[Node] = UIPS(dLevel)
-        getChildren(uips.last).foldLeft(Set[Node]())((x, y) => x.union(getParents(y)))
+  // A cut splits the graph into reason side and conflict side, regardless of dLevel
+  // divide the IG right before the given uip
+  // return the conflict side. Reason side is complementary
+  def cut(uip: Node): Set[Node] = {
+    var cNodes: List[Node] = List()
+    var frontier: List[Node] = getChildren(uip).toList
+
+    while (frontier.nonEmpty) {
+      val root: Node = frontier.head
+      frontier = frontier.splitAt(1)._2
+      if (!cNodes.contains(root)) {
+        cNodes = root :: cNodes
+        frontier ++= getChildren(root)
+      }
     }
+
+    cNodes.toSet
   }
 
-  def LastUIP(dLevel: Int): Set[Node] = {
-    conflictNode(dLevel) match {
-      case None => Set()
-      case Some(x) =>
-        (impliedNodess.filter(n => n.level < dLevel) ++ decisionNodess.filter(n => n.level <= dLevel)).toSet
-    }
+  // conflictClause returns all nodes belonging to reason side that have edges leading to conflicting side
+  def conflictClause(conflictSide: Set[Node]): Set[Node] = {
+    conflictSide.flatMap(c => getParents(c).diff(conflictSide))
   }
+
+  // Can extend to arbitrary learning scheme by varying the UIP selection
+  def learn(uip: Node): Set[Node] = {
+    conflictClause(cut(uip))
+  }
+
+//  def OneUIP(dLevel: Int): Set[Node] = {
+//    conflictNode(dLevel) match {
+//      case None => Set()
+//      case Some(x) =>
+//        conflictClause(cut(UIPS(dLevel).last))
+//    }
+//  }
+
+//  def LastUIP(dLevel: Int): Set[Node] = {
+//    conflictNode(dLevel) match {
+//      case None => Set()
+//      case Some(x) =>
+//        val uips: List[Node] = UIPS(dLevel)
+//        conflictClause(cut(uips.head))
+//    }
+//  }
 
   def getLiteral(l: Literal): Option[Node] = {
     val decisionVar = decisionNodess.find(_.literal == l)

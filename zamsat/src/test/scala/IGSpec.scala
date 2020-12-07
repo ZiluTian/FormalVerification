@@ -53,14 +53,14 @@ class IGSpec extends AnyFlatSpec {
     assert(uips == List(n1, n4))
   }
 
+  "Cut oneUIP" should "return conflict side n5, n10, n6 and the rest reason side"
   "OneUIP" should "return List(n8, n4, n9)" in {
-    val oneUIP: Set[Node] = sampleGraph.OneUIP(4)
-    assert(oneUIP == Set(n8, n4, n9))
+    assert(sampleGraph.cut(n4) == Set(n5, n6, n10))
+    assert(sampleGraph.learn(n4) == Set(n8, n4, n9))
   }
 
   "LastUIP" should "return List(n8, n1, n7, n9)" in {
-    val lUIP: Set[Node] = sampleGraph.LastUIP(4)
-    assert(lUIP == Set(n7, n8, n9, n1))
+    assert(sampleGraph.cut(n1) == Set(n2, n3, n4, n5, n6, n10))
+    assert(sampleGraph.learn(n1) == Set(n7, n8, n9, n1))
   }
-
 }
