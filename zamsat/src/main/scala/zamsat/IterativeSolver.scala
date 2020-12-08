@@ -20,10 +20,10 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   // conflictLevel is optionally the lowest level at which a conflict occurred (in the current branch)
   private final var conflictLevel: Option[Int] = None
   // counters counts for every how many of its literals are satisfied or unassiged (if one of these drops to 0 we have a conflict)
-  private final val counters : Array[Int] = Array.fill(clauses.size){0}
+  private final val counters : ArrayBuffer[Int] = ArrayBuffer.fill(clauses.size){0}
   // varClauses is an array of lists of clause indices that contain a particular literal
   // the list for literal v can be found at (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
-  private final val varClauses : Array[List[Int]] = Array.fill(clauses.size*2 + 1){Nil}
+  private final val varClauses : Array[List[Int]] = Array.fill(numVars*2){Nil}
   private final def varToCtrIdx(v: Int) = (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
   for ((clause, index) <- clauses.zipWithIndex) {
     counters(index) = clause.size
@@ -61,6 +61,16 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       case Some(l) if l >= level =>
         conflictLevel = None
       case _ =>
+    }
+  }
+  private final def counterAddLastClause(): Unit = {
+    val lastClause = clauses.last
+    val lastIdx = clauses.size - 1
+    counters.addOne(lastClause.count(l =>
+      state(l.abs - 1) != (if (l > 0) Assignment.FALSE else Assignment.TRUE)))
+    for (l <- lastClause) {
+      val varIdx = varToCtrIdx(l)
+      varClauses(varIdx) = lastIdx :: varClauses(varIdx)
     }
   }
 
@@ -130,7 +140,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       level = decisions(decisionLevel) - 1
       decisionLevel = decisionLevel - 1
       val decision = assignments(level + 1)
-      while (order(orderIdx) != decision.abs) {
+      while (order(orderIdx).abs != decision.abs) {
         orderIdx -= 1
       }
       if (order(orderIdx) == decision) {
