@@ -88,7 +88,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }.reverse.toArray
   }
 
-  private final val doDebug = true
+  private final val doDebug = false
 
   private final val literalWatcher = new LiteralWatcher(numVars, clauses)
 
