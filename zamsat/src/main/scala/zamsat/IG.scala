@@ -135,6 +135,14 @@ class IG() {
     edgess = edgess.filterNot(n => conflictNodes.contains(n.from) || conflictNodes.contains(n.to))
   }
 
+  // to fit with the backtracking
+  // remove all the nodes of the dLevel, including both decision and implication nodes
+  def removeLevelNodes(dLevel: Int): Unit = {
+    impliedNodess = impliedNodess.filterNot(n => n.level == dLevel)
+    decisionNodess = decisionNodess.filterNot(n => n.level == dLevel)
+    edgess = edgess.filterNot(n => n.from.level == dLevel || n.to.level == dLevel)
+  }
+
   // Can extend to arbitrary learning scheme by varying the UIP selection
   def learn(uip: Node): List[Literal] = {
     conflictClause(cut(uip))
@@ -156,6 +164,6 @@ class IG() {
   override def toString: String = {
     "Decision nodes: " + decisionNodess.mkString(" ") +
     "Implication nodes: " + impliedNodess.mkString(" ")
-//    "Edges: " + edgess.mkString(" ")
+    "Edges: " + edgess.mkString(" ")
   }
 }

@@ -3,6 +3,7 @@ package zamsat
 import scala.annotation.tailrec
 import scala.collection.immutable.List
 import scala.collection.mutable.ArrayBuffer
+import IG._
 
 class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[Int]]) {
   // we add a fake variable to deal with initial unit clauses
@@ -16,6 +17,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   private final val decisions     : Array[Int] = Array.fill(numVars){0}
   private final var decisionLevel : Int        = -1
   private final var level         : Int        = -1
+
+  //ZT add implication graph
+  private val implicationGraph: IG = new IG()
+
+  private var enableIG: Boolean = true
 
   // conflictLevel is optionally the lowest level at which a conflict occurred (in the current branch)
   private final var conflictLevel: Option[Int] = None
@@ -82,7 +88,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }.reverse.toArray
   }
 
-  private final val doDebug = false
+  private final val doDebug = true
 
   private final val literalWatcher = new LiteralWatcher(numVars, clauses)
 
@@ -106,13 +112,44 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   // assign takes in a literal and makes it so that literal is satisfied
   // (will overwrite previous truth value if there is one)
-  private final def assign(literal: Int): Int = {
+  private final def assign(literal: Int, clause: Option[List[Int]] = None): Int = {
     level += 1
     debug(f"Assigning $literal at level $level (decisionlevel $decisionLevel)")
     state(literal.abs - 1) = if (literal > 0) Assignment.TRUE else Assignment.FALSE
+
+    if (enableIG) {
+      clause match {
+        case None => // decision node assign
+          debug(f"Adding decision node to IG $decisionLevel")
+          implicationGraph.add(DecisionNode(literal, decisionLevel))
+        case Some(c) => { // implication node
+          if (c.diff(List(literal)).forall(l => implicationGraph.getLiteral(-l).isDefined)){
+            debug(f"Adding implication node to IG $decisionLevel")
+            if (!implicationGraph.getLiteral(literal).isDefined){
+              implicationGraph.add(ImpliedNode(literal, decisionLevel))
+            }
+
+            c.diff(List(literal))
+              .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(literal, decisionLevel))))
+
+            if (implicationGraph.getLiteral(-literal).isDefined) {
+              val learnedClause: List[Int] = implicationGraph.OneUIP(decisionLevel)
+              debug(f"Conflict detected in IG!")
+              clauses.addOne(learnedClause)
+              counterAddLastClause()
+              literalWatcher.addClause(clauses.length, state)
+              // update the implication graph to reflect the learned clause. Consider making it part of the learning clause.
+              implicationGraph.removeConflictNodes(implicationGraph.UIPS(decisionLevel).last)
+            }
+          }
+        }
+      }
+    }
+
     assignments(level) = literal
     counterAssign(literal, level)
-    debug(state.toList.toString())
+
+//    debug(state.toList.toString())
     level
   }
 
@@ -137,6 +174,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
         state(assignments(i).abs - 1) = Assignment.UNASSIGNED
         counterUnassign(assignments(i), i)
       }
+
+      if (enableIG){
+        implicationGraph.removeLevelNodes(decisionLevel)
+      }
+
       level = decisions(decisionLevel) - 1
       decisionLevel = decisionLevel - 1
       val decision = assignments(level + 1)
@@ -168,10 +210,10 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       val impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
       impliedLiterals match {
         case Some(literals) =>
-          for (literal <- literals) {
+          for ((literal, c) <- literals) {
             // check for double assignment
             if (state(literal.abs - 1) == Assignment.UNASSIGNED) {
-              assign(literal)
+              assign(literal, Some(c))
             }
           }
         case None => return
@@ -226,7 +268,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     backtrack()
     debug("going again!")
     if (dpll()) {
-      debug(state.map(e => e == Assignment.TRUE).mkString(", "))
+//      debug(state.map(e => e == Assignment.TRUE).mkString(", "))
       Some(state.slice(0, state.length - 1).map(e => e == Assignment.TRUE))
     } else {
       None

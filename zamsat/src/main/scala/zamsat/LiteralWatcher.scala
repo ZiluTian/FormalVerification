@@ -37,7 +37,7 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
 
   // finds all implied clauses watched by a literal and returns implied literals from them
   // this function also resets watched literal assignments
-  final def getImpliedLiterals(state: Array[Int], checkLiteral: Int): Option[List[Int]] = {
+  final def getImpliedLiterals(state: Array[Int], checkLiteral: Int): Option[List[(Int, List[Int])]] = {
     // unit finds a unit literal in a clause if there is one, otherwise returns 0
     // clause must be unsatisfied
     def unit(clause: List[Int]): Int = {
@@ -56,7 +56,8 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
       case v if v < 0 => positiveWatchedClauses(v.abs - 1)
       case 0 => new mutable.HashSet[Int]
     }).toList.filter(id => clauses(id).forall(e => state(e.abs - 1) != Assignment.satAssignment(e)))
-    var impliedValues = new ListBuffer[Int]
+    val impliedValues = new ListBuffer[(Int, List[Int])]()
+
     for (clauseId <- possibleClauses) {
       var impliedLiteral = unit(clauses(clauseId))
       if (impliedLiteral == 0) {
@@ -64,7 +65,7 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
           return None
         }
       } else {
-        impliedValues += impliedLiteral
+        impliedValues.append((impliedLiteral, clauses(clauseId)))
       }
     }
     Some(impliedValues.toList)

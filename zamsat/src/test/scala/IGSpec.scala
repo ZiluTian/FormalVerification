@@ -60,6 +60,10 @@ class IGSpec extends AnyFlatSpec {
     assert(sampleGraph.learn(n4).diff(List(-4, 8, 9)).isEmpty)
   }
 
+  "OneUIP 2" should "return List(n8, n4, n9)" in {
+    assert(sampleGraph.OneUIP(4).diff(List(-4, 8, 9)).isEmpty)
+  }
+
   "LastUIP" should "return List(n8, n1, n7, n9)" in {
     assert(sampleGraph.cut(n1) == Set(n2, n3, n4, n5, n6, n10))
     assert(sampleGraph.learn(n1).diff(List(n7, n8, n9, n1).map(x => -x.literal)).isEmpty)
