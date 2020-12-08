@@ -18,21 +18,15 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   private final var decisionLevel : Int        = -1
   private final var level         : Int        = -1
 
-  //ZT add implication graph
   private val implicationGraph: IG = new IG()
 
-  private var enableIG: Boolean = true
+  private val enableIG: Boolean = true
 
-  // conflictLevel is optionally the lowest level at which a conflict occurred (in the current branch)
-  private final var conflictLevel: Option[Int] = None
-  // counters counts for every how many of its literals are satisfied or unassiged (if one of these drops to 0 we have a conflict)
-  private final val counters : ArrayBuffer[Int] = ArrayBuffer.fill(clauses.size){0}
   // varClauses is an array of lists of clause indices that contain a particular literal
   // the list for literal v can be found at (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
   private final val varClauses : Array[List[Int]] = Array.fill(numVars*2){Nil}
   private final def varToCtrIdx(v: Int) = (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
   for ((clause, index) <- clauses.zipWithIndex) {
-    counters(index) = clause.size
     for (variable <- clause) {
       val varIdx = varToCtrIdx(variable)
       varClauses(varIdx) = index :: varClauses(varIdx)
@@ -41,45 +35,6 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   // order determines the decision order by the amount of times a literal occurs in clauses (more occurrences -> get picked first)
   private final val order = constructOrder()
   private final var orderIdx = 0
-  private final def counterAssign(v: Int, level: Int): Unit = {
-    var conflict = false
-    for (clause <- varClauses(varToCtrIdx(-v))) {
-      counters(clause) -= 1
-      if (counters(clause) <= 0) {
-        conflict = true
-      }
-    }
-    if (conflict) {
-      conflictLevel match {
-        case None =>
-          conflictLevel = Some(level)
-        case Some(l) if l > level =>
-          conflictLevel = Some(level)
-        case _ =>
-      }
-    }
-  }
-  private final def counterUnassign(v: Int, level: Int): Unit = {
-    for (clause <- varClauses(varToCtrIdx(-v))) {
-      counters(clause) += 1
-    }
-    conflictLevel match {
-      case Some(l) if l >= level =>
-        conflictLevel = None
-      case _ =>
-    }
-  }
-  private final def counterAddLastClause(): Unit = {
-    val lastClause = clauses.last
-    val lastIdx = clauses.size - 1
-    counters.addOne(lastClause.count(l =>
-      state(l.abs - 1) != (if (l > 0) Assignment.FALSE else Assignment.TRUE)))
-    for (l <- lastClause) {
-      val varIdx = varToCtrIdx(l)
-      varClauses(varIdx) = lastIdx :: varClauses(varIdx)
-    }
-  }
-
   private final def constructOrder(): Array[Int] = {
     val dupOrder = varClauses.map(_.size).zipWithIndex.sortBy(_._1)(Ordering[Int].reverse).map(e => (if (e._2 % 2 == 0) 1 else -1) * (e._2 / 2 + 1))
     dupOrder.foldLeft(List[Int](numVars)) {
@@ -94,21 +49,8 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   private final def debug(s: => String): Unit = if (doDebug) println(s)
 
-  // we have a conflict if there is at least one clause of which every literal is assigned the wrong truth value
-  // (so all assigned but none satisfied)
-  private final def checkConflict(): Boolean = conflictLevel.isDefined
-//  {
-//    clauses.exists(_.forall(v =>
-//      state(v.abs - 1) != Assignment.UNASSIGNED &&
-//      state(v.abs - 1) != (if (v > 0) Assignment.TRUE else Assignment.FALSE)))
-//  }
-
   // all variables are assigned a truth value if we are at assignment level numVars - 1
-  private final def allAssigned(): Boolean = level == numVars - 1
-
-  // getUnassigned optionally return the first unassigned variable it can find (lowest number)
-  private final def getUnassigned: Option[Int] =
-    state.zipWithIndex.find({ case (el, idx) => el == Assignment.UNASSIGNED }).map({ case (el, idx) => idx + 1 })
+  private final def allAssigned: Boolean = level == numVars - 1
 
   // assign takes in a literal and makes it so that literal is satisfied
   // (will overwrite previous truth value if there is one)
@@ -136,7 +78,6 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
               val learnedClause: List[Int] = implicationGraph.OneUIP(decisionLevel)
               debug(f"Conflict detected in IG!")
               clauses.addOne(learnedClause)
-              counterAddLastClause()
               literalWatcher.addClause(clauses.length, state)
               // update the implication graph to reflect the learned clause. Consider making it part of the learning clause.
               implicationGraph.removeConflictNodes(implicationGraph.UIPS(decisionLevel).last)
@@ -147,9 +88,6 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }
 
     assignments(level) = literal
-    counterAssign(literal, level)
-
-//    debug(state.toList.toString())
     level
   }
 
@@ -172,7 +110,6 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       for (i <- level to decisions(decisionLevel) by -1) {
         debug(f"Unassigning ${assignments(i)} (level $i)")
         state(assignments(i).abs - 1) = Assignment.UNASSIGNED
-        counterUnassign(assignments(i), i)
       }
 
       if (enableIG){
@@ -199,7 +136,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }
   }
 
-  private final def unitPropagation(): Unit = {
+  private final def unitPropagation(): Boolean = {
     // assume that the last assignment was a decision
     require(decisionLevel >= 0 && decisions(decisionLevel) == level)
     debug("Doing unit")
@@ -216,11 +153,12 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
               assign(literal, Some(c))
             }
           }
-        case None => return
+        case None => return false
       }
 
       currentLevel += 1
     } while (currentLevel <= level)
+    true
   }
 
   private final def decide(): Unit = {
@@ -235,12 +173,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     // it always should be assigned 0
     decide(-numVars)
     while (true) {
-      unitPropagation()
-      if (checkConflict()) {
+      if (!unitPropagation()) {
         if (!backtrack()) {
           return false
         }
-      } else if (allAssigned()) {
+      } else if (allAssigned) {
         return true
       } else {
         decide()
@@ -268,7 +205,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     backtrack()
     debug("going again!")
     if (dpll()) {
-//      debug(state.map(e => e == Assignment.TRUE).mkString(", "))
+      debug(state.map(e => e == Assignment.TRUE).mkString(", "))
       Some(state.slice(0, state.length - 1).map(e => e == Assignment.TRUE))
     } else {
       None

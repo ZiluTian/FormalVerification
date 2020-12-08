@@ -10,15 +10,14 @@ import scala.collection.immutable.List
 class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
   private final val random = new Random(123123123)
 
-  private final var positiveWatchedClauses : Array[mutable.HashSet[Int]] = Array.fill(numVars){new mutable.HashSet[Int]()}
-  private final var negativeWatchedClauses : Array[mutable.HashSet[Int]] = Array.fill(numVars){new mutable.HashSet[Int]()}
-  private final var watchedLiterals : ArrayBuffer[mutable.HashSet[Int]] = ArrayBuffer.fill(clauses.length){new mutable.HashSet[Int]()}
+  private final val positiveWatchedClauses : Array[mutable.HashSet[Int]] = Array.fill(numVars){new mutable.HashSet[Int]()}
+  private final val negativeWatchedClauses : Array[mutable.HashSet[Int]] = Array.fill(numVars){new mutable.HashSet[Int]()}
+  private final val watchedLiterals : ArrayBuffer[mutable.HashSet[Int]] = ArrayBuffer.fill(clauses.length){new mutable.HashSet[Int]()}
 
   // next two methods don't check whether the invariants hold
   private final def addWatchedLiteral(clauseId: Int, literal: Int): Unit = {
     watchedLiterals(clauseId).add(literal)
     if (literal > 0) {
-      var a : Int = 10
       positiveWatchedClauses(literal.abs - 1).add(clauseId)
     } else {
       negativeWatchedClauses(literal.abs - 1).add(clauseId)
@@ -28,7 +27,6 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
   private final def removeWatchedLiteral(clauseId: Int, literal: Int): Unit = {
     watchedLiterals(clauseId).remove(literal)
     if (literal > 0) {
-      var a : Int = 10
       positiveWatchedClauses(literal.abs - 1).remove(clauseId)
     } else {
       negativeWatchedClauses(literal.abs - 1).remove(clauseId)
