@@ -99,6 +99,15 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
     true
   }
 
+  // assigns watched literals to a clause
+  // at least 2 literals in the clause should be unknown
+  final def addClause(clauseId: Int, state: Array[Int]): Boolean = {
+    val unknownLiterals: List[Int] = clauses(clauseId).view.filter(e => state(e.abs - 1) == Assignment.UNASSIGNED).toList
+    require(unknownLiterals.length >= 2)
+    selectWatchedLiterals(clauseId, unknownLiterals)
+    true
+  }
+
   final def prepareWatchedLiterals(): Unit = {
     for (clauseId <- clauses.indices) {
       selectWatchedLiterals(clauseId, clauses(clauseId))
