@@ -4,9 +4,7 @@ import scala.annotation.tailrec
 import scala.collection.immutable.List
 import scala.collection.mutable.ArrayBuffer
 
-class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[Int]]) {
-  // we add a fake variable to deal with initial unit clauses
-  private final val numVars       : Int = numRealVars + 1
+class IterativeSolver(numVars: Int, private var clauses: ArrayBuffer[List[Int]]) {
   // state records the assigned truth value of all variables
   // the truth value of variable i can be found at state(i - 1)
   private final val state         : Array[Int] = Array.fill(numVars){0}
@@ -17,63 +15,56 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   private final var decisionLevel : Int        = -1
   private final var level         : Int        = -1
 
-  private final var conflictLevel: Option[Int] = None
-  private final val counters : Array[Int] = Array.fill(clauses.size){0}
+  private final val litsPerClause : Array[Int] = Array.fill(clauses.size){0}
+  private final val satCounter    : Array[Int] = Array.fill(clauses.size){0}
+  private final val unsatCounter  : Array[Int] = Array.fill(clauses.size){0}
   private final val varClauses : Array[List[Int]] = Array.fill(clauses.size*2){Nil}
   private final def varToCtrIdx(v: Int) = (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
+
+  private final def clauseIsImplied(id: Int) = satCounter(id) == 0 && unsatCounter(id) == litsPerClause(id) - 1
+
   for ((clause, index) <- clauses.zipWithIndex) {
-    counters(index) = clause.size
+    litsPerClause(index) = clause.size
     for (variable <- clause) {
       val varIdx = varToCtrIdx(variable)
       varClauses(varIdx) = index :: varClauses(varIdx)
     }
   }
-  private final def counterAssign(v: Int, level: Int): Unit = {
+  private final def counterAssign(v: Int): Option[List[Int]] = {
+    for (clause <- varClauses(varToCtrIdx(v))) {
+      satCounter(clause) += 1
+    }
+    var impliedClauses : List[Int] = Nil
     var conflict = false
     for (clause <- varClauses(varToCtrIdx(-v))) {
-      counters(clause) -= 1
-      if (counters(clause) <= 0) {
+      unsatCounter(clause) += 1
+      if (unsatCounter(clause) == litsPerClause(clause)) {
         conflict = true
+      } else if (clauseIsImplied(clause)) {
+        impliedClauses = clause :: impliedClauses
       }
     }
     if (conflict) {
-      conflictLevel match {
-        case None =>
-          conflictLevel = Some(level)
-        case Some(l) if l > level =>
-          conflictLevel = Some(level)
-        case _ =>
-      }
+      None
+    } else {
+      Some(impliedClauses)
     }
   }
-  private final def counterUnassign(v: Int, level: Int): Unit = {
-    for (clause <- varClauses(varToCtrIdx(-v))) {
-      counters(clause) += 1
+  private final def counterUnassign(v: Int): Unit = {
+    for (clause <- varClauses(varToCtrIdx(v))) {
+      satCounter(clause) -= 1
     }
-    conflictLevel match {
-      case Some(l) if l >= level =>
-        conflictLevel = None
-      case _ =>
+    for (clause <- varClauses(varToCtrIdx(-v))) {
+      unsatCounter(clause) -= 1
     }
   }
 
   private final val doDebug = false
 
-  private final val literalWatcher = new LiteralWatcher(numVars, clauses)
-
   private final def debug(s: => String): Unit = if (doDebug) println(s)
 
-  // we have a conflict if there is at least one clause of which every literal is assigned the wrong truth value
-  // (so all assigned but none satisfied)
-  private final def checkConflict(): Boolean = conflictLevel.isDefined
-//  {
-//    clauses.exists(_.forall(v =>
-//      state(v.abs - 1) != Assignment.UNASSIGNED &&
-//      state(v.abs - 1) != (if (v > 0) Assignment.TRUE else Assignment.FALSE)))
-//  }
-
   // all variables are assigned a truth value if we are at assignment level numVars - 1
-  private final def allAssigned(): Boolean = level == numVars - 1
+  private final def allAssigned: Boolean = level == numVars - 1
 
   // getUnassigned optionally return the first unassigned variable it can find (lowest number)
   private final def getUnassigned: Option[Int] =
@@ -81,44 +72,61 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   // assign takes in a literal and makes it so that literal is satisfied
   // (will overwrite previous truth value if there is one)
-  private final def assign(literal: Int): Int = {
-    level += 1
+  private final def assign(literal: Int): (Int, Boolean) = {
+    val currentLevel = level+1
+    level = currentLevel
     debug(f"Assigning $literal at level $level (decisionlevel $decisionLevel)")
     state(literal.abs - 1) = if (literal > 0) Assignment.TRUE else Assignment.FALSE
     assignments(level) = literal
-    counterAssign(literal, level)
-    debug(state.toList.toString())
-    level
+
+    counterAssign(literal) match {
+      case Some(l) =>
+        for (clause <- l) {
+          clauses(clause).find(v => state(v.abs - 1) == Assignment.UNASSIGNED) match {
+            case Some(lit) =>
+              if (!assign(lit)._2) {
+                return (currentLevel, false)
+              }
+            case None =>
+          }
+        }
+        (currentLevel, true)
+      case None =>
+        (currentLevel, false)
+    }
   }
 
   // decide takes in a literal makes it so that literal is satisfied,
   // but also records that this was a decision so we can revert it if needed
-  private final def decide(literal: Int): Int = {
+  private final def decide(literal: Int): (Int, Boolean) = {
     decisionLevel += 1
     debug(f"Deciding $literal at decisionlevel $decisionLevel")
-    decisions(decisionLevel) = assign(literal)
-    decisionLevel
+    val (lvl, noConflict) = assign(literal)
+    decisions(decisionLevel) = lvl
+    (decisionLevel, noConflict)
   }
 
   // backtrack undoes all assigments from the current decision level
   @tailrec
   private final def backtrack(): Boolean = {
-    // don't backtrack the first decision bc it was made on fake variable
-    if (decisionLevel >= 1) {
+    if (decisionLevel >= 0) {
       debug(f"Backtracking from decision level $decisionLevel (level $level)")
       // undoes all assigments including the assigment of the decision itself
       for (i <- level to decisions(decisionLevel) by -1) {
         debug(f"Unassigning ${assignments(i)} (level $i)")
         state(assignments(i).abs - 1) = Assignment.UNASSIGNED
-        counterUnassign(assignments(i), i)
+        counterUnassign(assignments(i))
       }
       level = decisions(decisionLevel) - 1
       decisionLevel = decisionLevel - 1
       val decision = assignments(level + 1)
       if (decision > 0) {
         // if the decision we reversed was a positive literal, we still have to try its negation
-        decide(-decision)
-        true
+        if (decide(-decision)._2) {
+          true
+        } else {
+          backtrack()
+        }
       } else {
         // otherwise we backtrack another decision level
         backtrack()
@@ -129,80 +137,28 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }
   }
 
-  private final def unitPropagation(): Unit = {
-    // assume that the last assignment was a decision
-    require(decisionLevel >= 0 && decisions(decisionLevel) == level)
-    debug("Doing unit")
-    var currentLevel = level
-    // check the consequences of assignment at each level, starting with current one
-    do {
-      // unit finds a unit literal in a clause if there is one, otherwise returns 0
-      val impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
-      impliedLiterals match {
-        case Some(literals) => {
-          for (literal <- literals) {
-            // check for double assignment
-            if (state(literal.abs - 1) == Assignment.UNASSIGNED) {
-              assign(literal)
-            }
-          }
-        }
-        case None => return
-      }
-
-      currentLevel += 1
-    } while (currentLevel <= level)
-  }
-
   private final def decide(): Boolean = {
-    // get the first unassigned variable and decide that it is true
-    // returns true if a decision was made, false otherwise
-    getUnassigned match {
-      case Some(v) => decide(v); true
-      case _ => false
-    }
+    decide(getUnassigned.get)._2
   }
 
   private final def dpll(): Boolean = {
-    // do a decision on fake variable
-    // it always should be assigned 0
-    decide(-numVars)
     while (true) {
-      unitPropagation()
-      if (checkConflict()) {
+      if (allAssigned) {
+        return true
+      }
+      if (!decide()) {
         if (!backtrack()) {
           return false
         }
-      } else if (allAssigned()) {
-        return true
-      } else {
-        decide()
       }
     }
     false
   }
 
   def solve(): Option[Array[Boolean]] = {
-    // ensure that all clauses have at least 2 variables
-    if (clauses.exists(_.isEmpty)) {
-      return None
-    }
-    // adding fake variable to all unit clauses
-    clauses = clauses.map(x =>
-      if (x.length > 1) {
-        x
-      } else {
-        numVars :: x
-      }
-    )
-    literalWatcher.prepareWatchedLiterals()
-    // we backtrack here to be able to return multiple solutions
-    // the first time solve is called backtrack will do nothing because the decision level is -1
-    backtrack()
-    debug("going again!")
     if (dpll()) {
       debug(state.map(e => e == Assignment.TRUE).mkString(", "))
-      Some(state.slice(0, state.length - 1).map(e => e == Assignment.TRUE))
+      Some(state.map(e => e == Assignment.TRUE))
     } else {
       None
     }
