@@ -35,6 +35,7 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
 
   // finds all implied clauses watched by a literal and returns implied literals from them
   // this function also resets watched literal assignments
+  // returns None if it finds a conflict
   final def getImpliedLiterals(state: Array[Int], checkLiteral: Int): Option[List[(Int, List[Int])]] = {
     // unit finds a unit literal in a clause if there is one, otherwise returns 0
     // clause must be unsatisfied
