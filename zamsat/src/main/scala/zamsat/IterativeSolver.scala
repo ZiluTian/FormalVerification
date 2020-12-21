@@ -105,7 +105,6 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     var currentLevel = level
     // check the consequences of assignment at each level, starting with current one
     do {
-      // unit finds a unit literal in a clause if there is one, otherwise returns 0
       val impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
       impliedLiterals match {
         case Some(literals) =>
@@ -115,6 +114,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
               assign(literal)
             }
           }
+        // found a conflict
         case None => return false
       }
 

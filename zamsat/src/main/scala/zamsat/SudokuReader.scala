@@ -37,3 +37,31 @@ class SudokuReader(sideSize: Int) {
     result
   }
 }
+
+class SudokuBenchmarkReader(sideSize: Int, filename: String) {
+  private val setSize : Int = sideSize * sideSize
+  private val file : Source = Source.fromFile(filename)
+  private val lines : Iterator[String] = file.getLines()
+
+  def closeFile(): Unit = {
+      file.close()
+  }
+
+  def readNext(): Array[Array[Int]] = {
+    val result = Array.fill(setSize)(Array.fill(setSize)(-1))
+    var line = lines.next()
+    while (line.length == 0) {
+      line = lines.next()
+    }
+    line = line.split(';')(0)
+    require(line.length == setSize * setSize)
+    for (i <- 0 until setSize) {
+      for (j <- 0 until setSize) {
+        if (line(i * setSize + j) != '.') {
+          result(i)(j) = line(i * setSize + j) - '1'
+        }
+      }
+    }
+    result
+  }
+}

@@ -1,0 +1,5 @@
+To prepare sudoku benchmark, download the following file:
+
+https://drive.google.com/file/d/1YS0AISs2qh3IFWEAjtKMhzY0WTbmcpev/view
+
+and place it in this folder, then run unpack_sudoku.sh
