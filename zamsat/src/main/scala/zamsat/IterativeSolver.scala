@@ -43,7 +43,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }.reverse.toArray
   }
 
-  private final val doDebug = false
+  private final val doDebug = true
 
   private final val literalWatcher = new LiteralWatcher(numVars, clauses)
 
@@ -62,11 +62,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     if (enableIG) {
       clause match {
         case None => // decision node assign
-          debug(f"Adding decision node to IG $decisionLevel")
+          debug(f"Adding decision node $literal to IG $decisionLevel")
           implicationGraph.add(DecisionNode(literal, decisionLevel))
         case Some(c) => { // implication node
           if (c.diff(List(literal)).forall(l => implicationGraph.getLiteral(-l).isDefined)){
-            debug(f"Adding implication node to IG $decisionLevel")
+            debug(f"Adding implication $literal node to IG $decisionLevel")
             if (!implicationGraph.getLiteral(literal).isDefined){
               implicationGraph.add(ImpliedNode(literal, decisionLevel))
             }
@@ -145,7 +145,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     do {
       val impliedLiterals = literalWatcher.getImpliedLiterals(state, assignments(currentLevel))
       impliedLiterals match {
-        case Some(literals) =>
+        case List((cid, Some(literals))) =>
           for ((literal, c) <- literals) {
             // check for double assignment
             if (state(literal.abs - 1) == Assignment.UNASSIGNED) {
@@ -153,7 +153,34 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
             }
           }
         // found a conflict
-        case None => return false
+        case List((cid, None)) =>
+          val c: List[Int] = clauses(cid)
+          // speculate the conflicting clause
+          c.foreach(literal => {
+            if (c.diff(List(literal)).forall(l => implicationGraph.getLiteral(-l).isDefined)){
+              debug(f"Adding implication $literal node to IG $decisionLevel")
+              if (!implicationGraph.getLiteral(literal).isDefined){
+                implicationGraph.add(ImpliedNode(literal, decisionLevel))
+              }
+
+              c.diff(List(literal))
+                .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(literal, decisionLevel))))
+
+              if (implicationGraph.getLiteral(-literal).isDefined) {
+                debug(f"Conflict detected in IG!")
+                val learnedClause: List[Int] = implicationGraph.OneUIP(decisionLevel)
+                // if the conflict is caused by decision node, learned clause empty
+                if (learnedClause.nonEmpty) {
+                  clauses.addOne(learnedClause)
+                  literalWatcher.addClause(clauses.length, state)
+                  // update the implication graph to reflect the learned clause. Consider making it part of the learning clause.
+                  implicationGraph.removeConflictNodes(implicationGraph.UIPS(decisionLevel).last)
+                }
+              }
+            }
+          })
+          return false
+        case _ =>
       }
 
       currentLevel += 1

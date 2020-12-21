@@ -96,8 +96,11 @@ class IG() {
         val conflict: Node = x
         val dNode: DecisionNode = decisionNodess.filter(n => n.level == dLevel).head
         val paths: Set[List[Node]] = allPaths(dNode, conflict)
-        assert(paths.nonEmpty)
-        paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }.filterNot(n => n == x)
+        if (paths.nonEmpty) {
+          paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }.filterNot(n => n == x)
+        }else {
+          List()
+        }
     }
   }
 
@@ -149,7 +152,14 @@ class IG() {
   }
 
   def OneUIP(dLevel: Int): List[Literal] = {
-    learn(UIPS(dLevel).last)
+    UIPS(dLevel) match {
+      case Nil => List()
+      case _ =>
+        val l = learn(UIPS(dLevel).last)
+        // for debugging
+        println("Learned UIP! " + l)
+        l
+    }
   }
 
   def getLiteral(l: Literal): Option[Node] = {
