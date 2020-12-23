@@ -13,6 +13,8 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
   private final val positiveWatchedClauses : Array[mutable.HashSet[Int]] = Array.fill(numVars){new mutable.HashSet[Int]()}
   private final val negativeWatchedClauses : Array[mutable.HashSet[Int]] = Array.fill(numVars){new mutable.HashSet[Int]()}
   private final val watchedLiterals : ArrayBuffer[mutable.HashSet[Int]] = ArrayBuffer.fill(clauses.length){new mutable.HashSet[Int]()}
+  // unit clauses and new clauses for which we didn't manage to select 2wl
+  private final var problematicClauseIds : mutable.HashSet[Int] = new mutable.HashSet[Int]()
 
   // next two methods don't check whether the invariants hold
   private final def addWatchedLiteral(clauseId: Int, literal: Int): Unit = {
@@ -50,15 +52,16 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
       }
     }
     //  select relevant clauses
-    val possibleClauses: List[Int] = (checkLiteral match {
+    var possibleClauses: List[Int] = (checkLiteral match {
       case v if v > 0 => negativeWatchedClauses(v.abs - 1)
       case v if v < 0 => positiveWatchedClauses(v.abs - 1)
       case 0 => new mutable.HashSet[Int]
-    }).toList.filter(id => clauses(id).forall(e => state(e.abs - 1) != Assignment.satAssignment(e)))
+    }).toList ++ problematicClauseIds.toList
+    possibleClauses = possibleClauses.filter(id => clauses(id).forall(e => state(e.abs - 1) != Assignment.satAssignment(e)))
     val impliedValues = new ListBuffer[(Int, Option[List[(Int, List[Int])]])]()
 
     for (clauseId <- possibleClauses) {
-      var impliedLiteral = unit(clauses(clauseId))
+      val impliedLiteral = unit(clauses(clauseId))
       if (impliedLiteral == 0) {
         if (!resetWatchedLiterals(clauseId, state)) {
           println("Conflict detected! clause " + clauses(clauseId))
@@ -97,15 +100,22 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
     }
 
     selectWatchedLiterals(clauseId, unknownLiterals)
+    // if we managed to select 2wl, then the clauses is not longer problematic
+    problematicClauseIds.remove(clauseId)
     true
   }
 
   // assigns watched literals to a clause
   // at least 2 literals in the clause should be unknown
-  final def addClause(clauseId: Int, state: Array[Int]): Boolean = {
-    val unknownLiterals: List[Int] = clauses(clauseId).view.filter(e => state(e.abs - 1) == Assignment.UNASSIGNED).toList
-    require(unknownLiterals.length >= 2)
-    selectWatchedLiterals(clauseId, unknownLiterals)
+  final def addClause(clause: List[Int], state: Array[Int]): Boolean = {
+    val unknownLiterals: List[Int] = clause.view.filter(e => state(e.abs - 1) == Assignment.UNASSIGNED).toList
+    clauses.append(clause)
+    watchedLiterals.append(new mutable.HashSet[Int]())
+    if (unknownLiterals.length >= 2) {
+      selectWatchedLiterals(clauses.length - 1, unknownLiterals)
+    } else {
+      problematicClauseIds.addOne(clauses.length - 1)
+    }
     true
   }
 

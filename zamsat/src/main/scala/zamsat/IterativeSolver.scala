@@ -77,8 +77,8 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
             if (implicationGraph.getLiteral(-literal).isDefined) {
               val learnedClause: List[Int] = implicationGraph.OneUIP(decisionLevel)
               debug(f"Conflict detected in IG!")
-              clauses.addOne(learnedClause)
-              literalWatcher.addClause(clauses.length, state)
+              clauses.append(learnedClause)
+              literalWatcher.addClause(learnedClause, state)
               // update the implication graph to reflect the learned clause. Consider making it part of the learning clause.
               implicationGraph.removeConflictNodes(implicationGraph.UIPS(decisionLevel).last)
             }
@@ -172,7 +172,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
                 // if the conflict is caused by decision node, learned clause empty
                 if (learnedClause.nonEmpty) {
                   clauses.addOne(learnedClause)
-                  literalWatcher.addClause(clauses.length, state)
+                  literalWatcher.addClause(learnedClause, state)
                   // update the implication graph to reflect the learned clause. Consider making it part of the learning clause.
                   implicationGraph.removeConflictNodes(implicationGraph.UIPS(decisionLevel).last)
                 }
