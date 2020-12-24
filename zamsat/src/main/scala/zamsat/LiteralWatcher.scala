@@ -64,7 +64,6 @@ class LiteralWatcher(numVars: Int, clauses: ArrayBuffer[List[Int]]) {
       val impliedLiteral = unit(clauses(clauseId))
       if (impliedLiteral == 0) {
         if (!resetWatchedLiterals(clauseId, state)) {
-          println("Conflict detected! clause " + clauses(clauseId))
           return List((clauseId, None))
         }
       } else {
