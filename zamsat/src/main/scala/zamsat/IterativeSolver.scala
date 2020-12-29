@@ -5,18 +5,21 @@ import scala.collection.immutable.List
 import scala.collection.mutable.ArrayBuffer
 import IG._
 
+import scala.collection.mutable
+
 class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[Int]]) {
   // we add a fake variable to deal with initial unit clauses
-  private final val numVars       : Int = numRealVars + 1
+  private final val numVars              : Int = numRealVars + 1
   // state records the assigned truth value of all variables
   // the truth value of variable i can be found at state(i - 1)
-  private final val state         : Array[Int] = Array.fill(numVars){0}
+  private final val state               : Array[Int] = Array.fill(numVars){0}
   // assignments is used as a stack that records the history of literal assignments (current = level)
-  private final val assignments   : Array[Int] = Array.fill(numVars){0}
+  private final val assignments         : Array[Int] = Array.fill(numVars){0}
   // decisions records the history of decisions that were made, also used as a stack (current = decisionLevel)
-  private final val decisions     : Array[Int] = Array.fill(numVars){0}
-  private final var decisionLevel : Int        = -1
-  private final var level         : Int        = -1
+  private final val decisions           : Array[Int] = Array.fill(numVars){0}
+  private final val bothPolaritiesTried : Array[Boolean] = Array.fill(numVars){false}
+  private final var decisionLevel       : Int        = -1
+  private final var level               : Int        = -1
 
   private val implicationGraph: IG = new IG()
 
@@ -32,18 +35,13 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       varClauses(varIdx) = index :: varClauses(varIdx)
     }
   }
-  // order determines the decision order by the amount of times a literal occurs in clauses (more occurrences -> get picked first)
-  private final var order = constructOrder()
-  private final var orderIdx = 0
-  private final def constructOrder(): Array[Int] = {
-    val dupOrder = varClauses.map(_.size).zipWithIndex.sortBy(_._1)(Ordering[Int].reverse).map(e => (if (e._2 % 2 == 0) 1 else -1) * (e._2 / 2 + 1))
-    dupOrder.foldLeft(List[Int](numVars)) {
-      case (acc, item) if acc.contains(-item) => acc
-      case (acc, item) => item::acc
-    }.reverse.toArray
-  }
+  private val scores = mutable.Map[Int, Float]()
+  (1 to numRealVars).foreach(i => {
+    scores(i) = 0
+    scores(-i) = 0
+  })
 
-  private final val doDebug = false
+  private final val doDebug = true
 
   private final val literalWatcher = new LiteralWatcher(numVars, clauses)
 
@@ -130,12 +128,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       level = decisions(decisionLevel) - 1
       decisionLevel = decisionLevel - 1
       val decision = assignments(level + 1)
-      while (order(orderIdx).abs != decision.abs) {
-        orderIdx -= 1
-      }
-      if (order(orderIdx) == decision) {
+      if (!bothPolaritiesTried(decisionLevel + 1)) {
+        debug(f"Trying reverse for decision level ${decisionLevel + 1}")
         // if the decision we reversed was the same sign as defined in [order], we still have to try its negation
         decide(-decision)
+        bothPolaritiesTried(decisionLevel) = true
         true
       } else {
         // otherwise we backtrack another decision level
@@ -177,10 +174,9 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   }
 
   private final def decide(): Unit = {
-    while(state(order(orderIdx).abs - 1) != Assignment.UNASSIGNED) {
-      orderIdx += 1
-    }
-    decide(order(orderIdx))
+    val next = scores.filter(kv => state(kv._1.abs - 1) == Assignment.UNASSIGNED).maxBy(_._2)._1
+    decide(next)
+    bothPolaritiesTried(decisionLevel) = false
   }
 
   private final def dpll(): Boolean = {
