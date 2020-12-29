@@ -33,7 +33,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }
   }
   // order determines the decision order by the amount of times a literal occurs in clauses (more occurrences -> get picked first)
-  private final val order = constructOrder()
+  private final var order = constructOrder()
   private final var orderIdx = 0
   private final def constructOrder(): Array[Int] = {
     val dupOrder = varClauses.map(_.size).zipWithIndex.sortBy(_._1)(Ordering[Int].reverse).map(e => (if (e._2 % 2 == 0) 1 else -1) * (e._2 / 2 + 1))
@@ -58,13 +58,13 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     val conflictingAssign: Int = c.diff(preceedAssign).head
 
     if (preceedAssign.forall(l => implicationGraph.getLiteral(-l).isDefined)) {
-      if (!implicationGraph.getLiteral(conflictingAssign).isDefined) {
+      if (implicationGraph.getLiteral(conflictingAssign).isEmpty) {
         debug(f"Adding implication $conflictingAssign node to IG $decisionLevel")
         implicationGraph.add(ImpliedNode(conflictingAssign, decisionLevel))
       }
 
       preceedAssign
-        .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(conflictingAssign, decisionLevel))))
+        .foreach(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(conflictingAssign, decisionLevel))))
 
       if (implicationGraph.getLiteral(-conflictingAssign).isDefined) {
         debug(f"Conflict detected in IG!")
