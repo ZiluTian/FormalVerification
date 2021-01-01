@@ -55,18 +55,17 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
   // add the conflicting clause c and literal to implication graph
   private final def addImplicationNode(c: List[Int], literal: Int): Unit = {
     val preceedAssign: List[Int] = c.filterNot(e => e.abs == literal.abs)
-    val conflictingAssign: Int = c.diff(preceedAssign).head
 
     if (preceedAssign.forall(l => implicationGraph.getLiteral(-l).isDefined)) {
-      if (!implicationGraph.getLiteral(conflictingAssign).isDefined) {
-        debug(f"Adding implication $conflictingAssign node to IG $decisionLevel")
-        implicationGraph.add(ImpliedNode(conflictingAssign, decisionLevel))
+      if (!implicationGraph.getLiteral(literal).isDefined) {
+        debug(f"Adding implication $literal node to IG $decisionLevel")
+        implicationGraph.add(ImpliedNode(literal, decisionLevel))
       }
 
       preceedAssign
-        .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(conflictingAssign, decisionLevel))))
+        .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(literal, decisionLevel))))
 
-      if (implicationGraph.getLiteral(-conflictingAssign).isDefined) {
+      if (implicationGraph.getLiteral(-literal).isDefined) {
         debug(f"Conflict detected in IG!")
         val learnedClause: List[Int] = implicationGraph.OneUIP(decisionLevel)
         // if the conflict is caused by decision node, learned clause empty
@@ -166,7 +165,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
           }
         // found a conflict
         case List((cid, None)) =>
-          addImplicationNode(clauses(cid), speculateLiteral)
+          addImplicationNode(clauses(cid), -speculateLiteral)
           return false
         case _ =>
       }
