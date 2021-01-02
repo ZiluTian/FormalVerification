@@ -109,12 +109,8 @@ class IG() {
 //    println("Paths are: ")
 //    paths.foreach(println)
 //    println("=========")
-    if (paths.nonEmpty) {
-      if (paths1.isEmpty || paths2.isEmpty) {
-        List()
-      } else {
+    if (paths.nonEmpty && paths1.nonEmpty && paths2.nonEmpty) {
         paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }
-      }
     } else {
       List()
     }
@@ -139,11 +135,6 @@ class IG() {
     }
 
     cNodes.toSet
-//    val allNodes: Set[Node] = impliedNodess ++ decisionNodess
-//    val cNodeSet = cNodes.toSet
-//    var reasonNodes: Set[Node] = allNodes.diff(cNodeSet)
-//    reasonNodes = reasonNodes.filterNot(n => n.isInstanceOf[ImpliedNode] && cNodeSet.diff(getChildren(n)) == cNodeSet)
-//    allNodes.diff(reasonNodes)
   }
 
   // conflictClause returns all nodes belonging to reason side that have edges leading to conflicting side
@@ -166,27 +157,6 @@ class IG() {
       removeNode(removeL.get)
     }
   }
-
-//  // Can extend to arbitrary learning scheme by varying the UIP selection
-//  def learn(cNode1: Node, cNode2: Node): List[Literal] = {
-//    val uips: List[Node] = UIPS(cNode1, cNode2)
-//    val uip: Node = uips.last
-//    val conflictSide: Set[Node] = cut(uip)
-//    println("Conflicts: " + cNode1 + cNode2 + " uips: " + uips + " uip: " + uip + "Conflict side:  " + conflictSide + " Edgess " + edgess)
-//    GraphDrawing.drawGraph(edgess, f"${cNode1}_${cNode2}")
-//    conflictClause(conflictSide)
-//  }
-
-  //  // Can extend to arbitrary learning scheme by varying the UIP selection
-//    def learn(uip: Node): List[Literal] = {
-//  //    val cuts: Set[Node] = cut(uip)
-//  //    println("Conflicts: " + cNode1 + cNode2 + "Cuts " + cuts + " Edgess " + edgess + " uip: " + uip)
-//      val conflictSide: Set[Node] = cut(uip)
-//      println("Conflicts: " + cNode1 + cNode2 + " uips: " + uips + " uip: " + uip + "Conflict side:  " + conflictSide + " Edgess " + edgess)
-//      GraphDrawing.drawGraph(edgess, f"${cNode1}_${cNode2}")
-//      conflictClause(conflictSide)
-//      conflictClause(Set(cNode1, cNode2))
-//    }
 
   def getLiteral(l: Literal): Option[Node] = {
     val decisionVar = decisionNodess.find(_.literal == l)
