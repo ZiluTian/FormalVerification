@@ -70,7 +70,7 @@ class IG() {
       case Nil =>
         Set()
       case _ =>
-        val candNodes: List[Node] = candEdges.map(_.to).filter(n => n.level == from.level)
+        val candNodes: List[Node] = candEdges.map(_.to)
         if (candNodes.contains(to)) {
           paths.union(Set(List.concat(path, List(from, to))))
         } else {
@@ -79,34 +79,43 @@ class IG() {
     }
   }
 
-  def UIPS(cNode1: Node, cNode2: Node): List[Node] = {
+  def getAllDecisionParents(node: Node): Set[DecisionNode] = {
+
+    var cNodes: List[Node] = List()
+    var frontier: List[Node] = getParents(node).toList
+
+    while (frontier.nonEmpty) {
+      val root: Node = frontier.head
+      frontier = frontier.splitAt(1)._2
+      if (!cNodes.contains(root)) {
+        cNodes = root :: cNodes
+        frontier ++= getParents(root)
+      }
+    }
+
+    cNodes.toSet
+      .filter(n => n.isInstanceOf[DecisionNode])
+      .asInstanceOf[Set[DecisionNode]]
+  }
+
+  def UIPS(cNode1: Node, cNode2: Node, dNode: DecisionNode): List[Node] = {
     assert(cNode1.level == cNode2.level)
     // debug
-    println("UIPS conflicting nodes " + cNode1 + " " + cNode2)
-    GraphDrawing.drawGraph(getEdgess, f"${cNode1}_${cNode2}")
+//    println("Conflicting nodes " + cNode1 + " " + cNode2 + " " + dNode.level)
 
-    val dLevel: Int = cNode1.level
-    val dNode: Option[DecisionNode] = decisionNodess.filter(n => n.level == dLevel).headOption
-    if (dNode.isDefined) {
-      val paths1: Set[List[Node]] = allPaths(dNode.get, cNode1)
-      val paths2: Set[List[Node]] = allPaths(dNode.get, cNode2)
-      val paths: Set[List[Node]] = paths1 ++ paths2
-//      println("Paths are: ")
-//      paths.foreach(println)
-//      println("=========")
-      if (paths.nonEmpty) {
-          paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }
-      } else {
-        println("Empty paths!")
-        assert(false)
-        List()
-      }
+    val paths1: Set[List[Node]] = allPaths(dNode, cNode1)
+    val paths2: Set[List[Node]] = allPaths(dNode, cNode2)
+    val paths: Set[List[Node]] = paths1 ++ paths2
+    println("Paths are: ")
+    paths.foreach(println)
+    println("=========")
+    if (paths.nonEmpty) {
+        paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }
     } else {
-      println("Empty dNode! " + cNode1 + " " + cNode2)
-      assert(false)
       List()
     }
   }
+
 
   // A cut splits the graph into reason side and conflict side
   // divide the IG right before the given uip
@@ -125,11 +134,12 @@ class IG() {
       }
     }
 
-    val allNodes: Set[Node] = impliedNodess ++ decisionNodess
-    val cNodeSet = cNodes.toSet
-    var reasonNodes: Set[Node] = allNodes.diff(cNodeSet)
-    reasonNodes = reasonNodes.filterNot(n => n.isInstanceOf[ImpliedNode] && cNodeSet.diff(getChildren(n)) == cNodeSet)
-    allNodes.diff(reasonNodes)
+    cNodes.toSet
+//    val allNodes: Set[Node] = impliedNodess ++ decisionNodess
+//    val cNodeSet = cNodes.toSet
+//    var reasonNodes: Set[Node] = allNodes.diff(cNodeSet)
+//    reasonNodes = reasonNodes.filterNot(n => n.isInstanceOf[ImpliedNode] && cNodeSet.diff(getChildren(n)) == cNodeSet)
+//    allNodes.diff(reasonNodes)
   }
 
   // conflictClause returns all nodes belonging to reason side that have edges leading to conflicting side
