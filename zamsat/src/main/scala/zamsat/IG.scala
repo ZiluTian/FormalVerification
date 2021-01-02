@@ -2,7 +2,7 @@ package zamsat
 
 import zamsat.Solver.Literal
 
-import scala.collection.immutable.List
+import scala.collection.mutable.ListBuffer
 
 object IG {
 
@@ -17,6 +17,7 @@ object IG {
 
   sealed case class Edge(from: Node, to: Node)
 
+  val learnedClauses: ListBuffer[List[Int]] = new ListBuffer[List[Int]]()
 }
 
 class IG() {
@@ -99,16 +100,11 @@ class IG() {
   }
 
   def UIPS(cNode1: Node, cNode2: Node, dNode: DecisionNode): List[Node] = {
-    assert(cNode1.level == cNode2.level)
-    // debug
-//    println("Conflicting nodes " + cNode1 + " " + cNode2 + " " + dNode.level)
 
     val paths1: Set[List[Node]] = allPaths(dNode, cNode1)
     val paths2: Set[List[Node]] = allPaths(dNode, cNode2)
     val paths: Set[List[Node]] = paths1 ++ paths2
-//    println("Paths are: ")
 //    paths.foreach(println)
-//    println("=========")
     if (paths.nonEmpty && paths1.nonEmpty && paths2.nonEmpty) {
         paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }
     } else {
@@ -142,6 +138,8 @@ class IG() {
   def conflictClause(conflictSide: Set[Node]): List[Literal] = {
     val learned: List[Literal] = conflictSide.flatMap(c => getParents(c).diff(conflictSide)).map(n => -n.literal).toList
 //    println(" learned scheme " + learned)
+    // for debugging, to test the learned clauses are satisfied
+//    IG.learnedClauses.append(learned)
     learned
   }
 
@@ -160,10 +158,12 @@ class IG() {
 
   def getLiteral(l: Literal): Option[Node] = {
     val decisionVar = decisionNodess.find(_.literal == l)
-    if (decisionVar.isDefined){
+    val impliedVar = impliedNodess.find(_.literal == l)
+    assert(!decisionVar.isDefined || !impliedVar.isDefined)
+    if (decisionVar.isDefined) {
       decisionVar
     } else {
-      impliedNodess.find(_.literal == l)
+      impliedVar
     }
   }
 
