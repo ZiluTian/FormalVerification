@@ -43,7 +43,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }.reverse.toArray
   }
 
-  private final val doDebug = true
+  private final val doDebug = false
 
   private final val literalWatcher = new LiteralWatcher(numVars, clauses)
 
@@ -54,12 +54,12 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   // add the conflicting clause c and literal to implication graph
   private final def addImplicationNode(c: List[Int], literal: Int): Unit = {
-    val preceedAssign: List[Int] = c.filterNot(e => e.abs == literal.abs)
+    val antecedentAssign: List[Int] = c.filterNot(e => e.abs == literal.abs)
 
-    if (preceedAssign.forall(l => implicationGraph.getLiteral(-l).isDefined)) {
+    if (antecedentAssign.forall(l => implicationGraph.getLiteral(-l).isDefined)) {
       var impLevel = decisionLevel
       if (c.length > 1) {
-        impLevel = preceedAssign.map(l => implicationGraph.getLiteral(-l).get.level).max
+        impLevel = antecedentAssign.map(l => implicationGraph.getLiteral(-l).get.level).max
       }
 
       if (!implicationGraph.getLiteral(literal).isDefined) {
@@ -69,7 +69,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
 //      assert(implicationGraph.getLiteral(assignments(decisions(decisionLevel))) == implicationGraph.getDecisionNode(decisionLevel))
 
-      preceedAssign
+      antecedentAssign
         .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(literal, impLevel))))
 
       if (implicationGraph.getLiteral(-literal).isDefined) {
@@ -83,9 +83,28 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
         assert(cNode1.isInstanceOf[ImpliedNode])
         assert(cNode2.isInstanceOf[ImpliedNode])
 
-        val uips: List[Node] = implicationGraph.UIPS(cNode1, cNode2)
-        val OneUIP: Node = uips.last
-        val conflictSide: Set[Node] = implicationGraph.cut(OneUIP)
+        val relevantDecisions: Set[DecisionNode] =
+          implicationGraph.getAllDecisionParents(cNode1)
+          .union(implicationGraph.getAllDecisionParents(cNode2))
+
+        if (doDebug){
+          GraphDrawing.drawGraph(implicationGraph.getEdgess(), f"${cNode1}_${cNode2}")
+        }
+
+        val uipsPerLevel: Set[(DecisionNode, List[Node])] = relevantDecisions.map(n => (n, implicationGraph.UIPS(cNode1, cNode2, n)))
+
+//        debug(uipsPerLevel.toString())
+        println(uipsPerLevel)
+        var conflictSide: Set[Node] = Set(cNode1, cNode2)
+
+        uipsPerLevel.map(n => {
+          if (n._2.isEmpty) {
+            conflictSide = conflictSide.union(implicationGraph.cut(n._1))
+          } else {
+            conflictSide = conflictSide.union(implicationGraph.cut(n._2.last))
+          }
+        })
+
         val learnedClause: List[Int] = implicationGraph.conflictClause(conflictSide)
 
         clauses.addOne(learnedClause)
