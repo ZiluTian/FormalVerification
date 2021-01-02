@@ -43,7 +43,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }.reverse.toArray
   }
 
-  private final val doDebug = false
+  private final val doDebug = true
 
   private final val literalWatcher = new LiteralWatcher(numVars, clauses)
 
@@ -57,25 +57,41 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     val preceedAssign: List[Int] = c.filterNot(e => e.abs == literal.abs)
 
     if (preceedAssign.forall(l => implicationGraph.getLiteral(-l).isDefined)) {
-      if (!implicationGraph.getLiteral(literal).isDefined) {
-        debug(f"Adding implication $literal node to IG $decisionLevel")
-        implicationGraph.add(ImpliedNode(literal, decisionLevel))
+      var impLevel = decisionLevel
+      if (c.length > 1) {
+        impLevel = preceedAssign.map(l => implicationGraph.getLiteral(-l).get.level).max
       }
 
+      if (!implicationGraph.getLiteral(literal).isDefined) {
+        debug(f"Adding implication $literal node to IG $impLevel $c")
+        implicationGraph.add(ImpliedNode(literal, impLevel))
+      }
+
+//      assert(implicationGraph.getLiteral(assignments(decisions(decisionLevel))) == implicationGraph.getDecisionNode(decisionLevel))
+
       preceedAssign
-        .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(literal, decisionLevel))))
+        .map(n => implicationGraph.add(Edge(implicationGraph.getLiteral(-n).get, ImpliedNode(literal, impLevel))))
 
       if (implicationGraph.getLiteral(-literal).isDefined) {
         debug(f"Conflict detected in IG!")
-        val learnedClause: List[Int] = implicationGraph.OneUIP(decisionLevel)
-        // if the conflict is caused by decision node, learned clause empty
-        if (learnedClause.nonEmpty) {
-          debug("Learned clause: " + learnedClause)
-          clauses.addOne(learnedClause)
-          literalWatcher.addClause(learnedClause, state)
-          // update the implication graph to reflect the learned clause. Consider making it part of the learning clause.
-          implicationGraph.removeConflictNodes(implicationGraph.UIPS(decisionLevel).last)
-        }
+
+        val cNode1: Node = implicationGraph.getLiteral(literal).get
+        val cNode2: Node = implicationGraph.getLiteral(-literal).get
+
+        // Conflict nodes should only be implied nodes
+        debug("Conflicting nodes: " + cNode1 + cNode2)
+        assert(cNode1.isInstanceOf[ImpliedNode])
+        assert(cNode2.isInstanceOf[ImpliedNode])
+
+        val uips: List[Node] = implicationGraph.UIPS(cNode1, cNode2)
+        val OneUIP: Node = uips.last
+        val conflictSide: Set[Node] = implicationGraph.cut(OneUIP)
+        val learnedClause: List[Int] = implicationGraph.conflictClause(conflictSide)
+
+        clauses.addOne(learnedClause)
+        literalWatcher.addClause(learnedClause, state)
+
+        conflictSide.foreach(n => implicationGraph.removeNode(n))
       }
     }
   }
@@ -119,11 +135,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
       // undoes all assigments including the assigment of the decision itself
       for (i <- level to decisions(decisionLevel) by -1) {
         debug(f"Unassigning ${assignments(i)} (level $i)")
+        if (enableIG){
+          implicationGraph.removeLiteral(assignments(i))
+          assert(implicationGraph.getLiteral(assignments(i)) == None)
+        }
         state(assignments(i).abs - 1) = Assignment.UNASSIGNED
-      }
-
-      if (enableIG){
-        implicationGraph.removeLevelNodes(decisionLevel)
       }
 
       level = decisions(decisionLevel) - 1
@@ -146,6 +162,29 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     }
   }
 
+  private final def unitHelper(impliedLiterals: List[(Int, Option[List[(Int, List[Int])]])], speculateLiteral: Int): Boolean = {
+    impliedLiterals match {
+      case List() => true
+      case x :: y =>
+        x match {
+          case (_, Some(literals)) =>
+            for ((literal, c) <- literals) {
+              // check for double assignment
+              if (state(literal.abs - 1) == Assignment.UNASSIGNED) {
+                assign(literal, Some(c))
+              }
+            }
+          case (cid, None) =>   // found a conflict
+            debug(f"Conflict detected! ${clauses(cid)}")
+            addImplicationNode(clauses(cid), -speculateLiteral)
+            return false
+          case _ =>
+            assert(false)
+        }
+        unitHelper(y, speculateLiteral)
+    }
+  }
+
   private final def unitPropagation(): Boolean = {
     // assume that the last assignment was a decision
     require(decisionLevel >= 0 && decisions(decisionLevel) == level)
@@ -155,21 +194,9 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
     do {
       val speculateLiteral: Int = assignments(currentLevel)
       val impliedLiterals = literalWatcher.getImpliedLiterals(state, speculateLiteral)
-      impliedLiterals match {
-        case List((_, Some(literals))) =>
-          for ((literal, c) <- literals) {
-            // check for double assignment
-            if (state(literal.abs - 1) == Assignment.UNASSIGNED) {
-              assign(literal, Some(c))
-            }
-          }
-        // found a conflict
-        case List((cid, None)) =>
-          addImplicationNode(clauses(cid), -speculateLiteral)
-          return false
-        case _ =>
+      if (!unitHelper(impliedLiterals, speculateLiteral)) {
+        return false
       }
-
       currentLevel += 1
     } while (currentLevel <= level)
     true

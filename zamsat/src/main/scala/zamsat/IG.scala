@@ -3,7 +3,6 @@ package zamsat
 import zamsat.Solver.Literal
 
 import scala.collection.immutable.List
-import scala.collection.mutable.ListBuffer
 
 object IG {
 
@@ -24,51 +23,52 @@ class IG() {
 
   import IG._
 
-  var decisionNodess: ListBuffer[DecisionNode] = new ListBuffer[DecisionNode]()
-  var impliedNodess: ListBuffer[ImpliedNode] = new ListBuffer[ImpliedNode]()
-  var edgess: ListBuffer[Edge] = new ListBuffer[Edge]()
+  var decisionNodess: Set[DecisionNode] = Set[DecisionNode]()
+  var impliedNodess: Set[ImpliedNode] = Set[ImpliedNode]()
+  var edgess: Set[Edge] = Set[Edge]()
 
   def init(dN: List[DecisionNode], iN: List[ImpliedNode], es: List[Edge]): Unit = {
-    decisionNodess.appendAll(dN)
-    impliedNodess.appendAll(iN)
-    edgess.appendAll(es)
+    decisionNodess = decisionNodess.union(dN.toSet)
+    impliedNodess = impliedNodess.union(iN.toSet)
+    edgess = edgess.union(es.toSet)
   }
 
   def add(node: Node): Unit = {
     node match {
-      case n: DecisionNode => decisionNodess.append(n)
-      case n: ImpliedNode => impliedNodess.append(n)
+      case n: DecisionNode => decisionNodess = decisionNodess.union(Set(n))
+      case n: ImpliedNode => impliedNodess = impliedNodess.union(Set(n))
     }
   }
 
   def add(edge: Edge): Unit = {
-    edgess.append(edge)
+    edgess = edgess.union(Set(edge))
   }
 
-  def getDecisionNodess(): List[DecisionNode] = {
-    decisionNodess.toList
+  def getDecisionNode(dLevel: Int): Option[DecisionNode] = {
+    decisionNodess.filter(n => n.level == dLevel).headOption
   }
 
-  def getImpliedNodess(): List[ImpliedNode] = {
-    impliedNodess.toList
+  def getImpliedNodes(dLevel: Int): Set[ImpliedNode] = {
+    impliedNodess.filter(n => n.level == dLevel)
   }
 
-  def getEdgess(): List[Edge] = {
-    edgess.toList
+  def getEdgess(): Set[Edge] = {
+    edgess
   }
 
   def getParents(n: Node): Set[Node] = {
-    edgess.filter(e => e.to == n).map(_.from).toSet
+    edgess.filter(e => e.to == n).map(_.from)
   }
 
   def getChildren(n: Node): Set[Node] = {
-    edgess.filter(e => e.from == n).map(_.to).toSet
+    edgess.filter(e => e.from == n).map(_.to)
   }
 
   def allPaths(from: Node, to: Node, path: List[Node] = List(), paths: Set[List[Node]] = Set[List[Node]]()): Set[List[Node]] = {
     val candEdges: List[Edge] = edgess.filter(_.from == from).toList
     candEdges match {
-      case Nil => Set()
+      case Nil =>
+        Set()
       case _ =>
         val candNodes: List[Node] = candEdges.map(_.to).filter(n => n.level == from.level)
         if (candNodes.contains(to)) {
@@ -79,35 +79,40 @@ class IG() {
     }
   }
 
-  def conflictNode(dLevel: Int): Option[Node] = {
-    impliedNodess
-      .filter(x => x.isInstanceOf[ImpliedNode] && x.level == dLevel)
-      .map(x => Math.abs(x.literal))
-      .groupBy(identity)
-      .collectFirst{
-        case (x, ys) if ys.lengthCompare(1) > 0 => ImpliedNode(x, dLevel)
-      }
-  }
+  def UIPS(cNode1: Node, cNode2: Node): List[Node] = {
+    assert(cNode1.level == cNode2.level)
+    // debug
+    println("UIPS conflicting nodes " + cNode1 + " " + cNode2)
+    GraphDrawing.drawGraph(getEdgess, f"${cNode1}_${cNode2}")
 
-  def UIPS(dLevel: Int): List[Node] = {
-    conflictNode(dLevel) match {
-      case None => List()
-      case Some(x) =>
-        val conflict: Node = x
-        val dNode: DecisionNode = decisionNodess.filter(n => n.level == dLevel).head
-        val paths: Set[List[Node]] = allPaths(dNode, conflict)
-        if (paths.nonEmpty) {
-          paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }.filterNot(n => n == x)
-        }else {
-          List()
-        }
+    val dLevel: Int = cNode1.level
+    val dNode: Option[DecisionNode] = decisionNodess.filter(n => n.level == dLevel).headOption
+    if (dNode.isDefined) {
+      val paths1: Set[List[Node]] = allPaths(dNode.get, cNode1)
+      val paths2: Set[List[Node]] = allPaths(dNode.get, cNode2)
+      val paths: Set[List[Node]] = paths1 ++ paths2
+//      println("Paths are: ")
+//      paths.foreach(println)
+//      println("=========")
+      if (paths.nonEmpty) {
+          paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }
+      } else {
+        println("Empty paths!")
+        assert(false)
+        List()
+      }
+    } else {
+      println("Empty dNode! " + cNode1 + " " + cNode2)
+      assert(false)
+      List()
     }
   }
 
-  // A cut splits the graph into reason side and conflict side, regardless of dLevel
+  // A cut splits the graph into reason side and conflict side
   // divide the IG right before the given uip
   // return the conflict side. Reason side is complementary
   def cut(uip: Node): Set[Node] = {
+
     var cNodes: List[Node] = List()
     var frontier: List[Node] = getChildren(uip).toList
 
@@ -120,47 +125,54 @@ class IG() {
       }
     }
 
-    cNodes.toSet
+    val allNodes: Set[Node] = impliedNodess ++ decisionNodess
+    val cNodeSet = cNodes.toSet
+    var reasonNodes: Set[Node] = allNodes.diff(cNodeSet)
+    reasonNodes = reasonNodes.filterNot(n => n.isInstanceOf[ImpliedNode] && cNodeSet.diff(getChildren(n)) == cNodeSet)
+    allNodes.diff(reasonNodes)
   }
 
   // conflictClause returns all nodes belonging to reason side that have edges leading to conflicting side
   // the clause learned from the conflict
   def conflictClause(conflictSide: Set[Node]): List[Literal] = {
-    conflictSide.flatMap(c => getParents(c).diff(conflictSide)).map(n => -n.literal).toList
+    val learned: List[Literal] = conflictSide.flatMap(c => getParents(c).diff(conflictSide)).map(n => -n.literal).toList
+    println(" learned scheme " + learned)
+    learned
   }
 
-  // update the IG when removing the conflict nodes
-  def removeConflictNodes(uip: Node): Unit = {
-    val conflictNodes: Set[Node] = cut(uip)
-
-    impliedNodess = impliedNodess.filterNot(n => conflictNodes.contains(n))
-    decisionNodess = decisionNodess.filterNot(n => conflictNodes.contains(n))
-    edgess = edgess.filterNot(n => conflictNodes.contains(n.from) || conflictNodes.contains(n.to))
+  def removeNode(node: Node): Unit = {
+    impliedNodess = impliedNodess.filterNot(n => n == node)
+    decisionNodess = decisionNodess.filterNot(n => n == node)
+    edgess = edgess.filterNot(n => (n.from == node || n.to==node))
   }
 
-  // to fit with the backtracking
-  // remove all the nodes of the dLevel, including both decision and implication nodes
-  def removeLevelNodes(dLevel: Int): Unit = {
-    impliedNodess = impliedNodess.filterNot(n => n.level == dLevel)
-    decisionNodess = decisionNodess.filterNot(n => n.level == dLevel)
-    edgess = edgess.filterNot(n => n.from.level == dLevel || n.to.level == dLevel)
-  }
-
-  // Can extend to arbitrary learning scheme by varying the UIP selection
-  def learn(uip: Node): List[Literal] = {
-    conflictClause(cut(uip))
-  }
-
-  def OneUIP(dLevel: Int): List[Literal] = {
-    UIPS(dLevel) match {
-      case Nil => List()
-      case _ =>
-        val l = learn(UIPS(dLevel).last)
-        // for debugging
-        println("Learned UIP! " + l)
-        l
+  def removeLiteral(l: Literal): Unit = {
+    val removeL: Option[Node] = getLiteral(l)
+    if (removeL.isDefined) {
+      removeNode(removeL.get)
     }
   }
+
+//  // Can extend to arbitrary learning scheme by varying the UIP selection
+//  def learn(cNode1: Node, cNode2: Node): List[Literal] = {
+//    val uips: List[Node] = UIPS(cNode1, cNode2)
+//    val uip: Node = uips.last
+//    val conflictSide: Set[Node] = cut(uip)
+//    println("Conflicts: " + cNode1 + cNode2 + " uips: " + uips + " uip: " + uip + "Conflict side:  " + conflictSide + " Edgess " + edgess)
+//    GraphDrawing.drawGraph(edgess, f"${cNode1}_${cNode2}")
+//    conflictClause(conflictSide)
+//  }
+
+  //  // Can extend to arbitrary learning scheme by varying the UIP selection
+//    def learn(uip: Node): List[Literal] = {
+//  //    val cuts: Set[Node] = cut(uip)
+//  //    println("Conflicts: " + cNode1 + cNode2 + "Cuts " + cuts + " Edgess " + edgess + " uip: " + uip)
+//      val conflictSide: Set[Node] = cut(uip)
+//      println("Conflicts: " + cNode1 + cNode2 + " uips: " + uips + " uip: " + uip + "Conflict side:  " + conflictSide + " Edgess " + edgess)
+//      GraphDrawing.drawGraph(edgess, f"${cNode1}_${cNode2}")
+//      conflictClause(conflictSide)
+//      conflictClause(Set(cNode1, cNode2))
+//    }
 
   def getLiteral(l: Literal): Option[Node] = {
     val decisionVar = decisionNodess.find(_.literal == l)
@@ -173,7 +185,7 @@ class IG() {
 
   override def toString: String = {
     "Decision nodes: " + decisionNodess.mkString(" ") +
-    "Implication nodes: " + impliedNodess.mkString(" ")
+      "Implication nodes: " + impliedNodess.mkString(" ")
     "Edges: " + edgess.mkString(" ")
   }
 }
