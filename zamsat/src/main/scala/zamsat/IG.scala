@@ -106,11 +106,15 @@ class IG() {
     val paths1: Set[List[Node]] = allPaths(dNode, cNode1)
     val paths2: Set[List[Node]] = allPaths(dNode, cNode2)
     val paths: Set[List[Node]] = paths1 ++ paths2
-    println("Paths are: ")
-    paths.foreach(println)
-    println("=========")
+//    println("Paths are: ")
+//    paths.foreach(println)
+//    println("=========")
     if (paths.nonEmpty) {
+      if (paths1.isEmpty || paths2.isEmpty) {
+        List()
+      } else {
         paths.head.foldLeft(List[Node]()){ (x, y) => if (paths.forall(_.contains(y))) x :+ y else x }
+      }
     } else {
       List()
     }
@@ -146,7 +150,7 @@ class IG() {
   // the clause learned from the conflict
   def conflictClause(conflictSide: Set[Node]): List[Literal] = {
     val learned: List[Literal] = conflictSide.flatMap(c => getParents(c).diff(conflictSide)).map(n => -n.literal).toList
-    println(" learned scheme " + learned)
+//    println(" learned scheme " + learned)
     learned
   }
 

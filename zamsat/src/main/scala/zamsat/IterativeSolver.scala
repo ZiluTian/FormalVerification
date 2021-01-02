@@ -20,7 +20,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   private val implicationGraph: IG = new IG()
 
-  private val enableIG: Boolean = true
+  private val enableIG: Boolean = false
 
   // varClauses is an array of lists of clause indices that contain a particular literal
   // the list for literal v can be found at (v.abs - 1) * 2 + (if (v > 0) 0 else 1)
@@ -54,6 +54,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
   // add the conflicting clause c and literal to implication graph
   private final def addImplicationNode(c: List[Int], literal: Int): Unit = {
+    assert(enableIG)
     val antecedentAssign: List[Int] = c.filterNot(e => e.abs == literal.abs)
 
     if (antecedentAssign.forall(l => implicationGraph.getLiteral(-l).isDefined)) {
@@ -87,14 +88,11 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
           implicationGraph.getAllDecisionParents(cNode1)
           .union(implicationGraph.getAllDecisionParents(cNode2))
 
-        if (doDebug){
-          GraphDrawing.drawGraph(implicationGraph.getEdgess(), f"${cNode1}_${cNode2}")
-        }
+//          GraphDrawing.drawGraph(implicationGraph.getEdgess(), f"${cNode1}_${cNode2}")
 
         val uipsPerLevel: Set[(DecisionNode, List[Node])] = relevantDecisions.map(n => (n, implicationGraph.UIPS(cNode1, cNode2, n)))
 
-//        debug(uipsPerLevel.toString())
-        println(uipsPerLevel)
+//        println(uipsPerLevel)
         var conflictSide: Set[Node] = Set(cNode1, cNode2)
 
         uipsPerLevel.map(n => {
@@ -105,7 +103,7 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
           }
         })
 
-        val learnedClause: List[Int] = implicationGraph.conflictClause(conflictSide)
+        val learnedClause: List[Int] = implicationGraph.conflictClause(conflictSide.diff(uipsPerLevel.flatMap(x => x._2)))
 
         clauses.addOne(learnedClause)
         literalWatcher.addClause(learnedClause, state)
@@ -195,7 +193,9 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
             }
           case (cid, None) =>   // found a conflict
             debug(f"Conflict detected! ${clauses(cid)}")
-            addImplicationNode(clauses(cid), -speculateLiteral)
+            if (enableIG) {
+              addImplicationNode(clauses(cid), -speculateLiteral)
+            }
             return false
           case _ =>
             assert(false)
