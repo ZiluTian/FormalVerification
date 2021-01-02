@@ -43,7 +43,7 @@ class IGSpec extends AnyFlatSpec {
   }
 
   "UIPS" should "return n1 and n4" in {
-    val uips: List[Node] = sampleGraph.UIPS(n5, n10)
+    val uips: List[Node] = sampleGraph.UIPS(n5, n10, n1)
     assert(uips == List(n1, n4))
   }
 }
