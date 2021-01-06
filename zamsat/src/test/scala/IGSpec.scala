@@ -5,7 +5,6 @@ import zamsat.IG._
 import scala.collection.immutable.List
 
 class IGSpec extends AnyFlatSpec {
-
   // Build the graph as in https://www.cs.princeton.edu/courses/archive/fall13/cos402/readings/SAT_learning_clauses.pdf on page 8
   val n1 = DecisionNode(-1, 4)
 
@@ -34,10 +33,6 @@ class IGSpec extends AnyFlatSpec {
   var sampleGraph: IG = new IG()
   sampleGraph.init(List(n1), List(n2, n3, n4, n5, n6, n7, n8, n9, n10), List(e1, e2, e3, e4, e5, e6, e7, e9, e10, e11))
 
-  "Conflict node" should "detect node 5" in {
-    assert(sampleGraph.conflictNode(4).contains(n5))
-  }
-
   "All paths" should "identify all the paths between two nodes" in {
 
     val path1: Set[List[Node]] = sampleGraph.allPaths(n1, n10)
@@ -48,30 +43,7 @@ class IGSpec extends AnyFlatSpec {
   }
 
   "UIPS" should "return n1 and n4" in {
-    val uips: List[Node] = sampleGraph.UIPS(4)
+    val uips: List[Node] = sampleGraph.UIPS(n5, n10, n1)
     assert(uips == List(n1, n4))
-  }
-
-  "Cut oneUIP" should "return conflict side n5, n10, n6 and the rest reason side" in {
-    assert(sampleGraph.cut(n4) == Set(n5, n6, n10))
-  }
-
-  "OneUIP" should "return List(n8, n4, n9)" in {
-    assert(sampleGraph.learn(n4).diff(List(-4, 8, 9)).isEmpty)
-  }
-
-  "OneUIP 2" should "return List(n8, n4, n9)" in {
-    assert(sampleGraph.OneUIP(4).diff(List(-4, 8, 9)).isEmpty)
-  }
-
-  "LastUIP" should "return List(n8, n1, n7, n9)" in {
-    assert(sampleGraph.cut(n1) == Set(n2, n3, n4, n5, n6, n10))
-    assert(sampleGraph.learn(n1).diff(List(n7, n8, n9, n1).map(x => -x.literal)).isEmpty)
-  }
-
-  "Remove conflict nodes" should "return a partial graph" in {
-    sampleGraph.removeConflictNodes(n4)
-    assert(sampleGraph.getImpliedNodess().diff(List(n2, n3, n4, n7, n8, n9)).isEmpty)
-//    println(sampleGraph.getEdgess())
   }
 }
