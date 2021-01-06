@@ -87,8 +87,18 @@ class IterativeSolver(numRealVars: Int, private var clauses: ArrayBuffer[List[In
 
         // Conflict nodes should only be implied nodes
         debug("Conflicting nodes: " + cNode1 + cNode2)
-        assert(cNode1.isInstanceOf[ImpliedNode])
-        assert(cNode2.isInstanceOf[ImpliedNode])
+        if (cNode1.isInstanceOf[DecisionNode]) {
+          implicationGraph.removeNode(cNode1)
+          return
+        }
+
+        if (cNode2.isInstanceOf[DecisionNode]) {
+          implicationGraph.removeNode(cNode1)
+          return
+        }
+
+        //        assert(cNode1.isInstanceOf[ImpliedNode])
+        //        assert(cNode2.isInstanceOf[ImpliedNode])
 
         val relevantDecisions: Set[DecisionNode] =
           implicationGraph.getAllDecisionParents(cNode1)
