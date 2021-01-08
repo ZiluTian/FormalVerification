@@ -39,7 +39,7 @@ class Solver() {
     val (pClauses, pModel) = pureLiteral(uClauses)
 
     if (pClauses.isEmpty) {
-      Some(pModel)
+      Some(uModel ++ pModel)
     } else if (pClauses.exists(_.isEmpty)) {
       None
     } else {
@@ -47,7 +47,7 @@ class Solver() {
       val nextDL: Int = decisionLevel + 1
       for (v <- Seq(literal, -literal)) {
         dpll(satisfy(clauses, v), nextDL) match {
-          case Some(model) => return Some(pModel ++ model + literalToAssignment(v))
+          case Some(model) => return Some(uModel ++ pModel ++ model + literalToAssignment(v))
           case _ =>
         }
       }
